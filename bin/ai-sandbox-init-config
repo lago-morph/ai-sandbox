@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Usage: ai-sandbox-init-config [--force] [KEY=VALUE ...]
+# Writes the host config (default ~/.config/ai-sandbox/config, or $AI_SANDBOX_CONFIG) from
+# config/ai-sandbox.conf.example, applying KEY=VALUE overrides. Refuses to overwrite an
+# existing config unless --force is given. Example:
+#   ai-sandbox-init-config AI_SANDBOX_NAME_PREFIX=laptop AI_SANDBOX_PERMISSION_MODE=bypassPermissions
+set -euo pipefail
+here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+if [ -z "${AI_SANDBOX_LIB:-}" ]; then
+  if [ -f "$here/../setup.sh" ]; then AI_SANDBOX_LIB=$(cd "$here/../lib" && pwd); else AI_SANDBOX_LIB=$HOME/.local/share/ai-sandbox/lib; fi
+fi
+# shellcheck source=../lib/common.sh
+source "$AI_SANDBOX_LIB/common.sh"
+
+force=0
+[ "${1:-}" = --force ] && { force=1; shift; }
+example="$AI_SANDBOX_LIB/../config/ai-sandbox.conf.example"
+[ -f "$example" ] || die "missing $example"
+if [ -e "$AI_SANDBOX_CONFIG" ] && [ $force = 0 ]; then
+  die "$AI_SANDBOX_CONFIG already exists (use --force to overwrite)"
+fi
+
+tmp=$(mktemp)
+cp "$example" "$tmp"
+for kv in "$@"; do
+  [[ "$kv" =~ ^(AI_SANDBOX_[A-Z_]+)=(.*)$ ]] || { rm -f "$tmp"; die "expected AI_SANDBOX_KEY=VALUE, got: $kv"; }
+  key=${BASH_REMATCH[1]}; val=${BASH_REMATCH[2]}
+  grep -qE "^#? ?$key=" "$tmp" || { rm -f "$tmp"; die "unknown config key: $key"; }
+  python3 - "$tmp" "$key" "$val" <<'PY'
+import re, shlex, sys
+path, key, val = sys.argv[1:]
+s = open(path).read()
+line = f'{key}={shlex.quote(val) if val else ""}'
+s = re.sub(rf'^# ?{key}=.*$|^{key}=.*$', lambda m: line, s, count=1, flags=re.M)
+open(path, 'w').write(s)
+PY
+done
+
+# Validate before installing it.
+( AI_SANDBOX_CONFIG=$tmp; config_load ) || { rm -f "$tmp"; die "resulting config is invalid"; }
+mkdir -p "$(dirname "$AI_SANDBOX_CONFIG")"
+mv "$tmp" "$AI_SANDBOX_CONFIG"
+chmod 600 "$AI_SANDBOX_CONFIG"
+echo "wrote $AI_SANDBOX_CONFIG"

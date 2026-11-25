@@ -1,0 +1,11 @@
+# Installed by ai-sandbox setup. Remote Control server for <git-basedir>/%i.
+[Unit]
+Description=Claude Remote Control for %i (ai-sandbox)
+
+[Service]
+ExecStart=%h/.local/bin/ai-sandbox-rc %i
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=default.target

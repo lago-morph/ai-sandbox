@@ -1,0 +1,7 @@
+# Installed by ai-sandbox setup.
+[Unit]
+Description=Fast-forward main checkouts of repos served by rc@ units (ai-sandbox)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/rc-refresh

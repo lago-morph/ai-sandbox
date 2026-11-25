@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Usage: rc-refresh [--switch] [repo...]
+# Fast-forwards the main checkout of repos in the git base dir to the remote default
+# branch. With no repos: every repo whose rc@ unit is running (this is what
+# rc-refresh.timer does).
+# Skips a checkout with uncommitted changes to tracked files. Without --switch, also skips
+# one that isn't on the default branch; with --switch, checks out the default branch first.
+set -uo pipefail
+here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+if [ -z "${AI_SANDBOX_LIB:-}" ]; then
+  if [ -f "$here/../setup.sh" ]; then AI_SANDBOX_LIB=$(cd "$here/../lib" && pwd); else AI_SANDBOX_LIB=$HOME/.local/share/ai-sandbox/lib; fi
+fi
+# shellcheck source=../lib/common.sh
+source "$AI_SANDBOX_LIB/common.sh"
+config_require
+
+switch=0
+[ "${1:-}" = --switch ] && { switch=1; shift; }
+names=("$@")
+if [ ${#names[@]} -eq 0 ]; then
+  while read -r unit _; do
+    n=${unit#rc@}; names+=("${n%.service}")
+  done < <(systemctl --user list-units --state=active --plain --no-legend 'rc@*.service')
+fi
+
+rc=0
+for n in "${names[@]}"; do
+  (
+    cd "$AI_SANDBOX_GIT_BASEDIR/$n" || exit 1
+    if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+      echo "$n: skipped (uncommitted changes)"; exit 0
+    fi
+    git fetch -q --prune origin || exit 1
+    git remote set-head origin --auto >/dev/null 2>&1
+    def=$(git symbolic-ref --short refs/remotes/origin/HEAD) || exit 1
+    def=${def#origin/}
+    cur=$(git symbolic-ref -q --short HEAD || echo '(detached)')
+    if [ "$cur" != "$def" ]; then
+      [ $switch = 1 ] || { echo "$n: skipped (on $cur, not $def)"; exit 0; }
+      git checkout -q "$def" || exit 1
+    fi
+    git merge -q --ff-only "origin/$def" || exit 1
+    echo "$n: $def at $(git rev-parse --short HEAD)"
+  ) || { echo "$n: refresh failed" >&2; rc=1; }
+done
+exit $rc
