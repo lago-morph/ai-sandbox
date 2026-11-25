@@ -1,0 +1,25 @@
+# ai-sandbox host config. Lives outside the repo (default ~/.config/ai-sandbox/config).
+# Bash syntax; sourced by setup.sh and the ai-sandbox commands. Commented-out keys use the
+# default shown. Create with bin/ai-sandbox-init-config; re-run ./setup.sh after changes.
+
+# Directory holding git checkouts. The ai-sandbox repo must be cloned directly inside it.
+# AI_SANDBOX_GIT_BASEDIR=$HOME/src
+
+# Where secrets come from. Only "file" exists today: one file per secret in
+# AI_SANDBOX_SECRETS_DIR (github = GitHub PAT, claude-oauth-token = optional setup-token).
+# AI_SANDBOX_SECRETS_BACKEND=file
+# AI_SANDBOX_SECRETS_DIR=$HOME/.secrets
+
+# Prefix for Remote Control names: servers appear as <prefix>-<repo>. Default: short hostname.
+# AI_SANDBOX_NAME_PREFIX=
+
+# How sessions started from claude.ai are placed: "worktree" (own git worktree each) or
+# "same-dir" (all share the main checkout; UNTESTED).
+# AI_SANDBOX_SPAWN_MODE=worktree
+
+# Permission mode for new sessions (acceptEdits, auto, bypassPermissions, default, dontAsk,
+# plan). Empty: use ~/.claude/settings.json.
+# AI_SANDBOX_PERMISSION_MODE=
+
+# How often rc-refresh.timer fast-forwards served repos (systemd time span).
+# AI_SANDBOX_REFRESH_INTERVAL=10min

@@ -1,0 +1,10 @@
+# Installed by ai-sandbox setup.
+[Unit]
+Description=Refresh served repos every @REFRESH_INTERVAL@ (ai-sandbox)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=@REFRESH_INTERVAL@
+
+[Install]
+WantedBy=timers.target
