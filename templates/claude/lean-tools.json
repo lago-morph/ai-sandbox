@@ -7,6 +7,7 @@
       "ReportFindings",
       "ShowOnboardingRolePicker",
       "SuggestSkills",
+      "ScheduleWakeup",
       "mcp__claude-code-remote",
       "mcp__claude-code-remote__*",
       "mcp__Claude_Code_Remote",

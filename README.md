@@ -195,9 +195,13 @@ uses one list:
 - Whatever is on `main` runs as root in every new cloud container, so keep these files free
   of secrets and review changes to them.
 
-> **Untested.** Not yet run in a real cloud environment: whether Claude Code honours this
-> `~/.claude/settings.json`, which user it runs as, and whether the server-level and glob deny
-> rules remove MCP tools from context.
+Tested on 2026-11-26 with one cloud session (lago-morph/ai-logs archive, session
+`session_014mWQ6hFXik7peBYqR6c6ci`). The setup script wrote the settings and Claude Code used
+them. Tools loaded in full went from 58 (43.5K tokens) to 14 (9.7K), and the context at the
+first step from 76.6K to 31.8K. The denied MCP servers disappeared entirely, not even deferred.
+Which of the four rule forms per server does it wasn't isolated; they're all kept.
+Claude Docs' server instructions (about 0.5K tokens) are still added even though its tools are
+denied. ScheduleWakeup (only used by `/loop`) was added to the list after that test.
 
 ## Security notes
 
