@@ -25,7 +25,8 @@
       "Skill(anthropic-skills:chrome-browser)",
       "Skill(dataviz)",
       "Skill(anthropic-skills:computer-use)",
-      "Skill(claude-api)"
+      "Skill(claude-api)",
+      "Skill(workflow-authoring)"
     ]
   },
   "skillOverrides": {
@@ -38,7 +39,8 @@
     "anthropic-skills:chrome-browser": "off",
     "dataviz": "off",
     "anthropic-skills:computer-use": "off",
-    "claude-api": "off"
+    "claude-api": "off",
+    "workflow-authoring": "off"
   },
   "deniedMcpServers": [
     {
