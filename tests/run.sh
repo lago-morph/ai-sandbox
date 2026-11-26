@@ -3,6 +3,7 @@
 # Regression tests. Each test runs against a throwaway $HOME and never touches the real
 # host config, secrets, systemd or network.
 #   --host   also run `./setup.sh --check` against this machine's real config (read-only)
+# Requires shellcheck on PATH.
 set -uo pipefail
 REPO=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
 export AI_SANDBOX_LIB="$REPO/lib"
