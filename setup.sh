@@ -34,6 +34,7 @@ export AI_SANDBOX_SELF_DIR AI_SANDBOX_SELF_NAME
 [ "$(dirname "$AI_SANDBOX_SELF_DIR")" = "$AI_SANDBOX_GIT_BASEDIR" ] ||
   die "the ai-sandbox repo must be cloned directly in AI_SANDBOX_GIT_BASEDIR ($AI_SANDBOX_GIT_BASEDIR), found at $AI_SANDBOX_SELF_DIR"
 
+[ $mode = check ] || start_log setup
 log "ai-sandbox $mode: $(git -C "$AI_SANDBOX_REPO_DIR" describe --always --dirty) from $AI_SANDBOX_REPO_DIR, config $AI_SANDBOX_CONFIG"
 pending=0 applied=0
 for step in "$AI_SANDBOX_LIB"/steps/[0-9]*.sh; do
@@ -46,11 +47,12 @@ for step in "$AI_SANDBOX_LIB"/steps/[0-9]*.sh; do
   if [ $mode = check ]; then
     log "PENDING $name"; pending=1; continue
   fi
-  log "apply   $name"
+  log "apply   $name  [$(ts)]"
   # shellcheck source=/dev/null
   ( source "$step"; apply ) || die "step $name failed"
   # shellcheck source=/dev/null
   ( source "$step"; check ) || die "step $name still not satisfied after applying it"
+  log "applied $name  [$(ts)]"
   applied=1
 done
 
@@ -62,4 +64,4 @@ if [ $applied = 1 ]; then
   running=$(systemctl --user list-units --state=active --plain --no-legend 'rc@*.service' | awk '{print $1}' | xargs)
   [ -z "$running" ] || log "note: running servers keep the previous version until restarted: $running"
 fi
-log "done"
+log "done  [$(ts)]${AI_SANDBOX_LOG_FILE:+; log: $AI_SANDBOX_LOG_FILE}"

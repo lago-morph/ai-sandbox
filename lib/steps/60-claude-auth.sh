@@ -17,9 +17,10 @@ check() {
 }
 
 apply() {
-  if [ -t 0 ] && [ -t 1 ]; then
+  # Straight to the terminal: setup's own output may be going through a log pipe.
+  if (: </dev/tty >/dev/tty) 2>/dev/null; then
     info "starting interactive Claude login"
-    "$AI_SANDBOX_BIN/claude" auth login
+    "$AI_SANDBOX_BIN/claude" auth login </dev/tty >/dev/tty 2>&1
   else
     secrets_init
     die "log in to Claude: run 'claude auth login' in a terminal, or put a token from 'claude setup-token' in $(secret_describe "$SECRET_CLAUDE_TOKEN"); then re-run setup"

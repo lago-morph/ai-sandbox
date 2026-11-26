@@ -143,6 +143,29 @@ test_install_fresh() {
   assert_eq "$(ai-sandbox-secret get github)" tok-1
   assert_fails ai-sandbox-secret has claude-oauth-token
   if grep -q tok-1 <<<"$out"; then echo "token echoed"; return 1; fi
+  # Everything went to a private log as well, without the token.
+  local logf; logf=$(readlink -f "$HOME/.local/state/ai-sandbox/install.log")
+  assert_contains "$out" "full log: $logf"
+  assert_contains "$(cat "$logf")" "stored the token for GitHub user octo"
+  assert_eq "$(stat -c %a "$logf")" 600
+  if grep -q tok-1 "$logf"; then echo "token in log"; return 1; fi
+}
+
+test_install_tokens_from_files() {
+  fake_github
+  printf 'tok-file\n' > "$T/gh-token"; printf 'sk-from-file' > "$HOME/claude-setup-token"
+  # Empty hostname answer: the current hostname is the default.
+  printf '\n\n\n\ny\n%s\n~/claude-setup-token\n' "$T/gh-token" | env -u GH_TOKEN -u GITHUB_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
+    "$REPO/install.sh" --no-setup >/dev/null 2>&1
+  assert_eq "$(ai-sandbox-secret get github)" tok-file
+  assert_eq "$(ai-sandbox-secret get claude-oauth-token)" sk-from-file
+  # shellcheck source=../lib/common.sh
+  source "$AI_SANDBOX_LIB/common.sh"; config_load
+  assert_eq "$AI_SANDBOX_HOSTNAME" "$(hostname -s | tr '[:upper:]' '[:lower:]')"
+  # A path that doesn't exist aborts instead of being stored as the token.
+  rm "$HOME/.secrets/github"
+  assert_fails sh -c "printf '\n\n\n\ny\n/no/such/file\n' | env -u GH_TOKEN -u GITHUB_TOKEN '$REPO/install.sh' --no-setup"
+  assert_fails ai-sandbox-secret has github
 }
 
 test_install_rerun_keeps_values() {
