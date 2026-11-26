@@ -7,10 +7,11 @@ nothing times out, you have the machine's full CPU, memory and disk, and you dec
 installed and what the sessions may do.
 
 Clone this repo, drop in your secrets, write a small host config, and run `./setup.sh`. The
-machine then shows up in your Claude environments list as `<prefix>-ai-sandbox`. Sessions there
-both manage the host (serve other repos, check services, change config) and develop this repo.
-Each other repo you serve gets its own `<prefix>-<repo>` environment, and every session gets its
-own git worktree.
+machine then shows up in your Claude environments list (under Remote Control) as
+`<hostname> ai-sandbox`. Sessions there both manage the host (serve other repos, check services,
+change config) and develop this repo. Each other repo you serve gets its own `<hostname> <repo>`
+entry, and every session gets its own git worktree. The list always uses the machine's hostname;
+set `AI_SANDBOX_HOSTNAME` to change it (on WSL it is otherwise the Windows computer name).
 
 **Supported:** Ubuntu on WSL2 (with systemd) and Ubuntu on AWS EC2. systemd is required.
 Other distros need a small platform file; see [Contributing](#contributing).
@@ -42,6 +43,7 @@ nano ~/.secrets/github        # paste the GitHub token; avoids leaving it in she
 **3. Create the host config** (stored at `~/.config/ai-sandbox/config`, outside the repo)
 ```bash
 ~/src/ai-sandbox/bin/ai-sandbox-init-config \
+  AI_SANDBOX_HOSTNAME=laptop \
   AI_SANDBOX_NAME_PREFIX=laptop \
   AI_SANDBOX_PERMISSION_MODE=bypassPermissions
 ```
@@ -51,11 +53,12 @@ nano ~/.secrets/github        # paste the GitHub token; avoids leaving it in she
 cd ~/src/ai-sandbox && ./setup.sh
 ```
 If you're not logged in to Claude yet, setup starts `claude auth login`; follow the prompts and
-setup continues. It's safe to re-run at any time.
+setup continues. It's safe to re-run at any time. On WSL, a new hostname takes effect after
+`wsl.exe --shutdown` from Windows; setup tells you when that's still needed.
 
 **5. Connect.** Open [claude.ai/code](https://claude.ai/code) or the Claude app, pick the
-`laptop-ai-sandbox` environment, and start a session. To work on another repo, ask that session
-to serve it ("serve lago-morph/cloud-app"), then start sessions in its `laptop-cloud-app`
+`laptop ai-sandbox` environment, and start a session. To work on another repo, ask that session
+to serve it ("serve lago-morph/cloud-app"), then start sessions in its `laptop cloud-app`
 environment.
 
 ### What setup does
@@ -64,12 +67,13 @@ environment.
 |---|---|
 | `00-platform` | Supported distro, systemd as PID 1 with a user manager, sudo. Enables systemd on WSL if needed. |
 | `10-packages` | `git`, `curl`, CA certificates, `python3`, and `gh` (from GitHub's apt repo). |
+| `15-hostname` | With `AI_SANDBOX_HOSTNAME`: on WSL, `[network] hostname` and `generateHosts = false` in `/etc/wsl.conf`; elsewhere, `hostnamectl` and cloud-init's `preserve_hostname`. Both: the `127.0.1.1` line in `/etc/hosts`. Originals kept as `*.bak-ai-sandbox`. |
 | `20-claude-cli` | Claude Code's native build in `~/.local/bin/claude`. |
 | `30-install` | This repo's `bin/` commands in `~/.local/bin`; `lib/`, `config/`, `templates/` in `~/.local/share/ai-sandbox`. |
 | `40-secrets` | Secrets storage is private (700/600) and the GitHub token is present. |
 | `50-github` | `git` gets the token from `ai-sandbox-git-credential` for github.com; `gh` is logged in with it; if git has no commit identity, it uses the token's GitHub account and noreply email. |
 | `60-claude-auth` | Claude is logged in (or a setup-token is present; see below). |
-| `70-claude-config` | A managed block of host conventions in `~/.claude/CLAUDE.md`; this repo trusted. |
+| `70-claude-config` | A managed block of host conventions in `~/.claude/CLAUDE.md`; this repo trusted. With `bypassPermissions`: the dangerous-mode warning pre-accepted, and the ai-sandbox auto mode rules plus a `Bash` allow rule in `~/.claude/settings.json` (see [Permission modes](#permission-modes)). |
 | `80-systemd` | Lingering, the `rc@` unit template, `rc-refresh.timer`, and `rc@ai-sandbox` enabled at boot and running. |
 
 ### Day to day
@@ -102,9 +106,10 @@ or edit it by hand, then re-run `./setup.sh`. The repo's `host-config` skill can
 | `AI_SANDBOX_GIT_BASEDIR` | `$HOME/src` | Where checkouts live. This repo must be cloned directly inside it. |
 | `AI_SANDBOX_SECRETS_BACKEND` | `file` | Where secrets come from. Only `file` exists today. |
 | `AI_SANDBOX_SECRETS_DIR` | `$HOME/.secrets` | `file` backend: one file per secret. |
-| `AI_SANDBOX_NAME_PREFIX` | short hostname | Environments appear as `<prefix>-<repo>`. Also used for auto-generated session names. |
+| `AI_SANDBOX_HOSTNAME` | empty | The machine's hostname, which the environment list shows as `<hostname> <repo>`. Empty: leave the hostname alone. |
+| `AI_SANDBOX_NAME_PREFIX` | short hostname | Sessions are named `<prefix>-<repo>` (the server's `--name`), and auto-generated session names use it. It doesn't change the environment list. |
 | `AI_SANDBOX_SPAWN_MODE` | `worktree` | `worktree`: each session gets its own git worktree. `same-dir`: sessions share the main checkout. |
-| `AI_SANDBOX_PERMISSION_MODE` | empty | Permission mode for new sessions (`bypassPermissions`, `acceptEdits`, `auto`, `default`, `dontAsk`, `plan`). Empty: use `~/.claude/settings.json`. |
+| `AI_SANDBOX_PERMISSION_MODE` | empty | Permission mode for new sessions (`bypassPermissions`, `acceptEdits`, `auto`, `default`, `dontAsk`, `plan`). Empty: use `~/.claude/settings.json`. The Claude app can override it; see [Permission modes](#permission-modes). |
 | `AI_SANDBOX_REFRESH_INTERVAL` | `10min` | How often served repos are fast-forwarded (systemd time span). |
 
 **Secrets** (names as used by the backend; with `file`, these are file names in the secrets dir):
@@ -114,19 +119,38 @@ or edit it by hand, then re-run `./setup.sh`. The repo's `host-config` skill can
 | `github` | yes | git over HTTPS to github.com, and `gh`. Read at use time; after rotating it, re-run `./setup.sh` so `gh` picks it up too. |
 | `claude-oauth-token` | no | A token from `claude setup-token`, passed to Remote Control servers instead of the interactive login. |
 
-> **Untested configurations.** Only the defaults above plus `AI_SANDBOX_NAME_PREFIX` and
-> `AI_SANDBOX_PERMISSION_MODE=bypassPermissions` run on a real host today. These work in the
-> unit tests but haven't been used for real: `same-dir` spawn mode, a non-default git base dir
-> or secrets dir, a different refresh interval, and `claude-oauth-token` (it isn't confirmed
-> that Remote Control accepts setup-tokens). If you rely on one of them, please send a PR with a
-> test once it works for you.
+> **Untested configurations.** Only the defaults above plus `AI_SANDBOX_NAME_PREFIX`,
+> `AI_SANDBOX_PERMISSION_MODE=bypassPermissions` and `AI_SANDBOX_HOSTNAME` on WSL run on a real
+> host today. (`AI_SANDBOX_HOSTNAME` on WSL: the files are verified, but the environment list
+> showing the new name after `wsl.exe --shutdown` is not confirmed yet.) These work in the unit
+> tests but haven't been used for real: `AI_SANDBOX_HOSTNAME` outside WSL (hostnamectl,
+> cloud-init), `same-dir` spawn mode, a non-default git base dir or secrets dir, a different
+> refresh interval, and `claude-oauth-token` (it isn't confirmed that Remote Control accepts
+> setup-tokens). If you rely on one of them, please send a PR with a test once it works for you.
+
+### Permission modes
+
+`AI_SANDBOX_PERMISSION_MODE` is passed to `claude remote-control --permission-mode`, but the
+Claude app (seen on iOS/iPadOS) sends its own mode when it creates a session, typically `auto`,
+and that wins. The app's mode picker doesn't offer bypass for Remote Control sessions. See
+[anthropics/claude-code#87829](https://github.com/anthropics/claude-code/issues/87829).
+
+So with `bypassPermissions`, setup also writes rules for auto mode's classifier into
+`~/.claude/settings.json`, from `templates/claude/auto-mode.json`: an `autoMode.environment`
+entry saying this is the user's sandbox, and `autoMode.allow` entries saying the user has
+pre-approved every Bash command (sudo included), host administration and Claude config edits.
+Each is tagged `(ai-sandbox)`; setup keeps `"$defaults"` first in each list and leaves your own
+entries alone. Auto mode still runs its classifier and its hard-block rules, so this is close to
+bypass but not identical. Setup also adds a `Bash` entry to `permissions.allow`, which removes
+Bash prompts in Manual and Accept edits mode (auto mode ignores such broad rules). With any other
+permission mode, setup removes these entries. `claude auto-mode config` shows the effective rules.
 
 ## Security notes
 
 - Remote Control only makes outbound HTTPS connections; no inbound ports are needed. On EC2,
   the security group can deny all inbound traffic (use SSM or a temporary SSH rule for setup).
-- `bypassPermissions` lets sessions run any command as your user without asking, and this user
-  usually has sudo. That's the point of a personal sandbox, but use a machine and a GitHub token
+- `bypassPermissions` (and the auto mode pre-approval rules it installs) lets sessions run any
+  command as your user without asking, and this user usually has sudo. That's the point of a personal sandbox, but use a machine and a GitHub token
   you're comfortable handing to an agent. A fine-grained token limited to specific repos is best.
 - Secrets never go into the repo or the config. Anything running as your user can read them,
   including sessions; the sandbox is only as isolated as the user account.

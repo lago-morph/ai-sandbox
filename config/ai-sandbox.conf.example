@@ -10,7 +10,13 @@
 # AI_SANDBOX_SECRETS_BACKEND=file
 # AI_SANDBOX_SECRETS_DIR=$HOME/.secrets
 
-# Prefix for Remote Control names: servers appear as <prefix>-<repo>. Default: short hostname.
+# This machine's hostname. The claude.ai environment list labels each served repo as
+# "<hostname> <repo>", so set this to replace an unwieldy name (e.g. WSL inheriting the Windows
+# computer name). Takes effect after a restart (WSL: wsl.exe --shutdown). Empty: leave it alone.
+# AI_SANDBOX_HOSTNAME=
+
+# Prefix for Remote Control session names: sessions are titled <prefix>-<repo> until renamed.
+# Default: short hostname.
 # AI_SANDBOX_NAME_PREFIX=
 
 # How sessions started from claude.ai are placed: "worktree" (own git worktree each) or
@@ -18,7 +24,9 @@
 # AI_SANDBOX_SPAWN_MODE=worktree
 
 # Permission mode for new sessions (acceptEdits, auto, bypassPermissions, default, dontAsk,
-# plan). Empty: use ~/.claude/settings.json.
+# plan). Empty: use ~/.claude/settings.json. The Claude app may override it when it creates a
+# session (it puts sessions in auto mode), so bypassPermissions also installs auto mode rules
+# that pre-approve everything the agent does here; see README.md.
 # AI_SANDBOX_PERMISSION_MODE=
 
 # How often rc-refresh.timer fast-forwards served repos (systemd time span).

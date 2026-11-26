@@ -33,3 +33,46 @@ platform_install_gh() {
   sudo apt-get update -qq
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gh
 }
+
+# ---------------------------------------------------------------- hostname
+# WSL: /etc/wsl.conf [network] hostname plus generateHosts=false (WSL otherwise rewrites
+# /etc/hosts with the Windows computer name); takes effect after `wsl.exe --shutdown`.
+# Elsewhere (untested): hostnamectl, plus cloud-init's preserve_hostname so EC2 keeps it.
+# Both: the 127.0.1.1 line in /etc/hosts, so the name resolves.
+
+PLATFORM_CLOUD_INIT_HOSTNAME_CFG=/etc/cloud/cloud.cfg.d/99-ai-sandbox-hostname.cfg
+
+# Prints "PATH<TAB>CONTENT_FILE" for each file that should change; content files are temp files.
+_platform_hostname_plan() {
+  local name=$1 t
+  t=$(mktemp); hosts_render /etc/hosts "$name" > "$t"
+  root_file_matches /etc/hosts "$t" && rm -f "$t" || printf '/etc/hosts\t%s\n' "$t"
+  if is_wsl; then
+    t=$(mktemp); ini_render /etc/wsl.conf network "hostname=$name" generateHosts=false > "$t"
+    root_file_matches /etc/wsl.conf "$t" && rm -f "$t" || printf '/etc/wsl.conf\t%s\n' "$t"
+  elif [ -d /etc/cloud/cloud.cfg.d ]; then
+    t=$(mktemp); printf '# Installed by ai-sandbox setup (AI_SANDBOX_HOSTNAME).\npreserve_hostname: true\n' > "$t"
+    root_file_matches "$PLATFORM_CLOUD_INIT_HOSTNAME_CFG" "$t" && rm -f "$t" ||
+      printf '%s\t%s\n' "$PLATFORM_CLOUD_INIT_HOSTNAME_CFG" "$t"
+  fi
+}
+
+# Exit 0 if the hostname is configured to persist as NAME (it may still need a restart).
+platform_hostname_check() {
+  local name=$1 ok=0 path t
+  while IFS=$'\t' read -r path t; do info "$path not set up for hostname $name"; rm -f "$t"; ok=1; done \
+    < <(_platform_hostname_plan "$name")
+  if ! is_wsl && [ "$(hostnamectl --static 2>/dev/null)" != "$name" ]; then
+    info "static hostname is not $name"; ok=1
+  fi
+  return $ok
+}
+
+platform_hostname_apply() {
+  local name=$1 path t
+  while IFS=$'\t' read -r path t; do
+    info "updating $path (original kept as $path.bak-ai-sandbox)"
+    root_file_write "$path" "$t"; rm -f "$t"
+  done < <(_platform_hostname_plan "$name")
+  is_wsl || [ "$(hostnamectl --static 2>/dev/null)" = "$name" ] || sudo hostnamectl set-hostname "$name"
+}

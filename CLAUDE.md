@@ -11,13 +11,17 @@ Read README.md for what setup does, the config keys, and the layout.
 ## Managing the host
 - Serve a repo: `rc-start <owner>/<repo>` (or `rc-start <repo>` if already cloned). It clones
   into the git base dir, puts the main checkout on the default branch, fast-forwards it, trusts
-  it, and starts `rc@<repo>`. The user then connects to the `<prefix>-<repo>` environment.
+  it, and starts `rc@<repo>`. The user then connects to the `<hostname> <repo>` entry in the
+  environment list (sessions are named `<prefix>-<repo>`).
   Other repos are not started at boot; only `rc@<this repo>` is.
 - Stop: `systemctl --user stop rc@<repo>`. List: `systemctl --user list-units 'rc@*'`.
   Logs: `journalctl --user -u rc@<repo>`.
 - Never run `claude remote-control` directly or as a background task; use `rc-start`/systemd.
 - Only one server can serve a directory. After one is killed, a new one may be refused as
   "already served" for 1-2 minutes until the old registration expires; the unit retries itself.
+- Every change to the host goes through this repo: if a task needs a host change (files in
+  `/etc`, `~/.claude/settings.json`, packages, units), add or extend a step in `lib/steps/` and
+  apply it with setup. Don't hand-edit the host and stop there.
 - Host config: `~/.config/ai-sandbox/config` (see the `host-config` skill). Secrets: through the
   backend only (`ai-sandbox-secret has|describe NAME`). Never print a secret's value.
 - The host only changes when `./setup.sh` runs. Run `./setup.sh --check` first and show the user
@@ -27,7 +31,9 @@ Read README.md for what setup does, the config keys, and the layout.
   your own session**: tell the user and get confirmation first.
 - Files setup manages (don't hand-edit; change the repo and re-run setup): `~/.local/bin/{rc-*,ai-sandbox-*}`,
   `~/.local/share/ai-sandbox/`, `~/.config/systemd/user/{rc@.service,rc-refresh.*}`, the
-  ai-sandbox block in `~/.claude/CLAUDE.md`.
+  ai-sandbox block in `~/.claude/CLAUDE.md`, the `(ai-sandbox)` auto mode rules and the `Bash`
+  allow rule in `~/.claude/settings.json`, and (with `AI_SANDBOX_HOSTNAME`) `/etc/wsl.conf`
+  `[network]`, `/etc/hosts`'s `127.0.1.1` line.
 
 ## Developing
 - Run `tests/run.sh` before every commit (it needs `shellcheck`; tests use a throwaway `$HOME`).
