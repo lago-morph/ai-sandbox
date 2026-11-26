@@ -39,14 +39,16 @@ mkdir -p ~/src && git clone https://github.com/lago-morph/ai-sandbox.git ~/src/a
   (defaults to the hostname), the permission mode (defaults to `bypassPermissions`), and
   optionally the advanced settings. It writes `~/.config/ai-sandbox/config`.
 - **GitHub token:** keeps one already in `~/.secrets/github`, offers `$GH_TOKEN`/`$GITHUB_TOKEN`
-  if set, or asks you to paste one (not echoed). It checks the token with GitHub before storing it.
-- **Claude login:** paste a `claude setup-token` token, or press Enter to log in through the
+  if set, or asks you to paste one or the path of a file holding it (not echoed). It checks the token with GitHub before storing it.
+- **Claude login:** paste a `claude setup-token` token (or the path of a file holding it), or press Enter to log in through the
   browser while setup runs (recommended; skipped if you're already logged in).
 - **Setup:** runs `./setup.sh` (see the table below).
 - **Restart:** if the hostname or your groups changed, it offers to reboot; `rc@ai-sandbox`
   starts again at boot. On WSL it prints how to restart the distro from Windows instead
   (`wsl.exe --terminate <distro>` or `wsl.exe --shutdown`, then open the distro again).
 
+Everything it and setup print also goes to a log, `~/.local/state/ai-sandbox/install.log`
+(setup on its own: `setup.log`); each links to the latest timestamped file next to it.
 It's safe to re-run: current values are the defaults and stored secrets are kept. Later changes
 can also go through `./setup.sh` directly, which never prompts except for the Claude login.
 
@@ -95,6 +97,7 @@ setup tells you when that's still needed.
 | See what's served | `systemctl --user list-units 'rc@*'` |
 | Server logs | `journalctl --user -u rc@<repo>` |
 | Check the host matches this repo (changes nothing) | `./setup.sh --check` |
+| Logs of the last install / setup run | `~/.local/state/ai-sandbox/install.log`, `setup.log` |
 | Run the tests | `tests/run.sh` (add `--host` to include `./setup.sh --check`) |
 
 Only `rc@ai-sandbox` starts at boot. Other repos are served until you stop them or the machine

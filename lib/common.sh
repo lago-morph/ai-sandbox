@@ -18,6 +18,24 @@ info() { printf '   %s\n' "$*" >&2; }
 warn() { printf 'WARN: %s\n' "$*" >&2; }
 die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
+# start_log NAME: from here on, copies stdout and stderr to a timestamped log file,
+# ${XDG_STATE_HOME:-~/.local/state}/ai-sandbox/NAME-YYYYmmdd-HHMMSS.log, with NAME.log pointing to
+# the latest. Commands this one starts (e.g. install.sh running setup.sh) log to the same file.
+# Hidden prompts aren't echoed, so typed secrets don't reach the log.
+start_log() {
+  [ -z "${AI_SANDBOX_LOG_FILE:-}" ] || return 0
+  local dir=${XDG_STATE_HOME:-$HOME/.local/state}/ai-sandbox
+  mkdir -p "$dir"
+  AI_SANDBOX_LOG_FILE="$dir/$1-$(date +%Y%m%d-%H%M%S).log"
+  export AI_SANDBOX_LOG_FILE
+  ( umask 077; : > "$AI_SANDBOX_LOG_FILE" )
+  ln -sfn "$(basename "$AI_SANDBOX_LOG_FILE")" "$dir/$1.log"
+  exec > >(tee -a "$AI_SANDBOX_LOG_FILE") 2>&1
+  log "[$(date '+%F %T')] $1 $(git -C "${AI_SANDBOX_REPO_DIR:-.}" describe --always --dirty 2>/dev/null): logging to $AI_SANDBOX_LOG_FILE"
+}
+# ts: the time, for step log lines.
+ts() { date +%T; }
+
 # ---------------------------------------------------------------- config
 
 config_defaults() {

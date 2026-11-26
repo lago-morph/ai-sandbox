@@ -23,6 +23,8 @@ case "${1:-}" in
   *) die "unknown argument: $1" ;;
 esac
 [ "$(id -u)" != 0 ] || die "run this as the user the sandbox is for, not as root (setup uses sudo itself)"
+start_log install
+trap 'log "full log: $AI_SANDBOX_LOG_FILE"' EXIT
 
 # ------------------------------------------------------------------ prompts (stdin, prompts on stderr)
 
@@ -41,13 +43,24 @@ ask_yn() {
     case "${a:-$2}" in [Yy]|[Yy]es) return 0 ;; [Nn]|[Nn]o) return 1 ;; esac
   done
 }
-# ask_secret PROMPT -> the answer, read without echo
+# ask_secret PROMPT -> the answer, read without echo. An answer that names an existing file
+# (/path, ~/path or ./path) is replaced by that file's contents.
 ask_secret() {
   local a
   printf '%s: ' "$1" >&2
   IFS= read -rs a || die "input ended"
   echo >&2
-  printf '%s' "$a" | tr -d '[:space:]'
+  a=$(printf '%s' "$a" | tr -d '[:space:]')
+  # shellcheck disable=SC2088  # a literal "~/" typed by the user
+  case "$a" in
+    /*|./*|'~/'*)
+      # shellcheck disable=SC2088
+      [ "${a:0:2}" != '~/' ] || a="$HOME/${a:2}"
+      [ -f "$a" ] || die "no such file: $a"
+      info "read it from $a"
+      tr -d '[:space:]' < "$a" ;;
+    *) printf '%s' "$a" ;;
+  esac
 }
 section() { printf '\n== %s\n' "$*" >&2; }
 
@@ -103,14 +116,14 @@ fi
 info "Remote Control lists this machine as '<hostname> <repo>' in the claude.ai environment list."
 cur_host=$(hostname -s | tr '[:upper:]' '[:lower:]')
 while :; do
-  host=$(ask "Hostname" "$(raw_config AI_SANDBOX_HOSTNAME)")
-  host=${host:-$cur_host}
+  cur=$(raw_config AI_SANDBOX_HOSTNAME)
+  host=$(ask "Hostname" "${cur:-$cur_host}")
   [[ "$host" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] && break
   info "use lowercase letters, digits and '-' (not at either end)"
 done
 while :; do
-  prefix=$(ask "Session name prefix (sessions are named <prefix>-<repo>)" "$(raw_config AI_SANDBOX_NAME_PREFIX)")
-  prefix=${prefix:-$host}
+  cur=$(raw_config AI_SANDBOX_NAME_PREFIX)
+  prefix=$(ask "Session name prefix (sessions are named <prefix>-<repo>)" "${cur:-$host}")
   [[ "$prefix" =~ ^[A-Za-z0-9_.-]+$ ]] && break
   info "use letters, digits, '.', '_' and '-'"
 done
@@ -185,7 +198,7 @@ if [ $have_github = 0 ]; then
   info "Paste a GitHub fine-grained personal access token (https://github.com/settings/personal-access-tokens)"
   info "for the repos you'll work on: Contents and Pull requests read/write; Actions/Workflows for CI."
   while :; do
-    tok=$(ask_secret "GitHub token (not shown)")
+    tok=$(ask_secret "GitHub token, or the path of a file holding it (not shown)")
     [ -n "$tok" ] || die "a GitHub token is required"
     printf '%s' "$tok" | store_github && break
   done
@@ -208,7 +221,7 @@ else
   if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && ask_yn "Store the token in \$CLAUDE_CODE_OAUTH_TOKEN?" n; then
     tok=$CLAUDE_CODE_OAUTH_TOKEN
   else
-    tok=$(ask_secret "Paste a setup-token, or press Enter to log in through the browser during setup")
+    tok=$(ask_secret "Paste a setup-token or the path of a file holding one, or press Enter to log in through the browser during setup")
   fi
   if [ -n "$tok" ]; then
     printf '%s' "$tok" | secret_set "$SECRET_CLAUDE_TOKEN"
