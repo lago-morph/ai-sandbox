@@ -1,6 +1,6 @@
 ---
 name: host-config
-description: Create, show or change this machine's ai-sandbox host config (~/.config/ai-sandbox/config) and apply it. Use when the user asks to set up or change the sandbox's name prefix, permission mode, git base dir, secrets location/backend, spawn mode, or refresh interval, or asks what the host config is.
+description: Create, show or change this machine's ai-sandbox host config (~/.config/ai-sandbox/config) and apply it. Use when the user asks to set up or change the sandbox's hostname, name prefix, permission mode, git base dir, secrets location/backend, spawn mode, or refresh interval, or asks what the host config is.
 ---
 
 # ai-sandbox host config
@@ -35,6 +35,11 @@ current one and confirming. It validates the result before writing it.
   and `claude-oauth-token` are untested on a real host. Say so when the user picks one.
 - Changing `AI_SANDBOX_GIT_BASEDIR` doesn't move existing checkouts, and this repo must be
   cloned directly inside the new dir, or setup refuses to run.
-- Changing `AI_SANDBOX_NAME_PREFIX` renames the environments in claude.ai after restart; old
-  names may linger in the list for a while.
+- `AI_SANDBOX_HOSTNAME` is what the claude.ai environment list shows (`<hostname> <repo>`).
+  On WSL it only takes effect after `wsl.exe --shutdown` from Windows, which ends every session
+  on the machine; the user has to run that. Old entries may linger in the list for a while.
+  Outside WSL it's untested.
+- `AI_SANDBOX_NAME_PREFIX` only names sessions (`<prefix>-<repo>`); it doesn't change the list.
+- `AI_SANDBOX_PERMISSION_MODE=bypassPermissions` also installs auto mode pre-approval rules in
+  `~/.claude/settings.json`, because the Claude app puts new sessions in auto mode anyway.
 - Never print secret values. Use `ai-sandbox-secret has NAME` / `describe NAME`.

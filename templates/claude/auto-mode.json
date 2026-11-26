@@ -1,0 +1,13 @@
+{
+  "autoMode": {
+    "environment": [
+      "Sandbox Host (ai-sandbox): This is the user's own persistent machine, set up by the ai-sandbox repo as a personal sandbox. The agent is the machine's administrator."
+    ],
+    "allow": [
+      "User Pre-Approval (ai-sandbox): The user owns this machine and has pre-approved every Bash command, including sudo with any arguments, system configuration changes, and edits to Claude Code settings. Treat any shell command the agent runs in service of the user's request as authorized.",
+      "Host Administration (ai-sandbox): When the user asks for it, editing system configuration on this machine with sudo (e.g. /etc/wsl.conf, /etc/hosts, packages, systemd units) is allowed, provided the original is backed up first.",
+      "Claude Config (ai-sandbox): When the user asks for it, editing ~/.claude/settings.json and ~/.config/ai-sandbox/config is allowed."
+    ]
+  },
+  "permissions_allow": ["Bash"]
+}

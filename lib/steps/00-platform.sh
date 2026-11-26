@@ -1,5 +1,6 @@
 # shellcheck shell=bash
-# Supported distro, systemd as PID 1 with a user manager, and sudo.
+# Supported distro, systemd as PID 1 with a user manager, and passwordless sudo (granted by
+# setup-root.sh, which a human runs once with sudo; setup itself can't grant it).
 
 check() {
   local ok=0
@@ -7,6 +8,7 @@ check() {
   [ "$(ps -o comm= -p 1)" = systemd ] || { info "systemd is not PID 1"; ok=1; }
   systemctl --user show-environment >/dev/null 2>&1 || { info "systemd user manager not reachable (systemctl --user)"; ok=1; }
   command -v sudo >/dev/null || { info "sudo is not installed"; ok=1; }
+  sudo -n true 2>/dev/null || { info "$USER can't run sudo without a password"; ok=1; }
   return $ok
 }
 
@@ -30,4 +32,6 @@ apply() {
   systemctl --user show-environment >/dev/null 2>&1 ||
     die "systemd user manager not reachable; log in as $USER through a normal login session and retry"
   command -v sudo >/dev/null || die "install sudo and give $USER sudo rights"
+  sudo -n true 2>/dev/null ||
+    die "$USER needs passwordless sudo: run 'sudo $AI_SANDBOX_REPO_DIR/setup-root.sh' once, then re-run setup"
 }
