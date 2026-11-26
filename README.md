@@ -185,7 +185,8 @@ Artifact about 9K. `templates/claude/lean-tools.json` denies them by bare name, 
 permissions docs say removes a tool from context. It also turns off skills no session
 here uses (office documents, browsers, computer use, dataviz, claude-api) with `skillOverrides: "off"` plus a
 `Skill(...)` deny rule each; a local test showed they leave the skill listing, without
-isolating which of the two does it. `deniedMcpServers` blocks the claude.ai Claude Docs
+isolating which of the two does it. Skills from a plugin ignore both, so `enabledPlugins` turns off the
+claude.ai-synced `cowork-plugin-management@synced` plugin instead. `deniedMcpServers` blocks the claude.ai Claude Docs
 connector, whose tools are denied anyway but whose server instructions would still load. It's kept here so every cloud environment uses one list:
 
 - Paste `cloud/bootstrap.sh` as the setup script of each claude.ai/code environment you use.

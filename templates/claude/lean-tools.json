@@ -44,5 +44,8 @@
     {
       "serverName": "claude.ai Claude Docs"
     }
-  ]
+  ],
+  "enabledPlugins": {
+    "cowork-plugin-management@synced": false
+  }
 }
