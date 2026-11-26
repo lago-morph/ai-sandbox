@@ -1,20 +1,41 @@
 #!/usr/bin/env bash
-# Usage: cloud/setup.sh   (run by cloud/bootstrap.sh, as root, in a claude.ai/code container)
-# Merges templates/claude/lean-tools.json into ~/.claude/settings.json for root and every user
-# with a home under /home, so tools no session uses aren't loaded into every session's context.
-# Existing settings are kept: deny rules and lists such as deniedMcpServers are added to
-# (no duplicates), objects such as skillOverrides are merged per entry, other keys are set.
-#   AI_SANDBOX_CLOUD_BASE   URL of the repo's raw files (set by bootstrap.sh)
-#   AI_SANDBOX_LEAN_TOOLS   local lean-tools.json to use instead of downloading it (tests)
-#   AI_SANDBOX_CLOUD_HOMES  space-separated home dirs to update (default: /root and /home/*)
-set -euo pipefail
+# The setup script of a claude.ai/code cloud environment, as one line:
+#   curl -fsSL --max-time 30 -o /tmp/ai-sandbox-cloud.sh https://raw.githubusercontent.com/lago-morph/ai-sandbox/main/cloud/setup.sh && bash /tmp/ai-sandbox-cloud.sh || true
+# Runs as root before Claude starts. Merges templates/claude/lean-tools.json into
+# ~/.claude/settings.json for root and every user with a home under /home, so tools and skills
+# no session uses aren't loaded into every session's context. Existing settings are kept: deny
+# rules and lists such as deniedMcpServers are added to (no duplicates), objects such as
+# skillOverrides are merged per entry, other keys are set.
+# Never fails and never hangs (a failing setup script stops the session from starting): the
+# run is limited to AI_SANDBOX_CLOUD_TIMEOUT seconds and always exits 0.
+#   AI_SANDBOX_CLOUD_BASE     URL of the repo's raw files (default: this repo's main)
+#   AI_SANDBOX_CLOUD_TIMEOUT  seconds for the whole run (default 120)
+#   AI_SANDBOX_LEAN_TOOLS     local lean-tools.json to use instead of downloading it (tests)
+#   AI_SANDBOX_CLOUD_HOMES    space-separated home dirs to update (default: /root and /home/*)
+set -uo pipefail
+if [ -z "${_AI_SANDBOX_CLOUD_INNER:-}" ]; then
+  limit=${AI_SANDBOX_CLOUD_TIMEOUT:-120}
+  if command -v timeout >/dev/null; then
+    _AI_SANDBOX_CLOUD_INNER=1 timeout "$limit" bash "$0" "$@"; rc=$?
+  else
+    _AI_SANDBOX_CLOUD_INNER=1 bash "$0" "$@"; rc=$?
+  fi
+  case $rc in
+    0) ;;
+    124) echo "ai-sandbox cloud setup: timed out after ${limit}s; continuing" ;;
+    *) echo "ai-sandbox cloud setup: failed ($rc); continuing" ;;
+  esac
+  exit 0
+fi
+set -e
+base=${AI_SANDBOX_CLOUD_BASE:-https://raw.githubusercontent.com/lago-morph/ai-sandbox/main}
 
 src=${AI_SANDBOX_LEAN_TOOLS:-}
 if [ -z "$src" ]; then
   src=$(mktemp)
-  curl -fsSL --retry 3 -o "$src" "${AI_SANDBOX_CLOUD_BASE:?}/templates/claude/lean-tools.json"
+  curl -fsSL --retry 3 --max-time 30 -o "$src" "$base/templates/claude/lean-tools.json"
 fi
-command -v python3 >/dev/null || { echo "ai-sandbox cloud setup: python3 not found; skipped"; exit 1; }
+command -v python3 >/dev/null || { echo "ai-sandbox cloud setup: python3 not found"; exit 1; }
 
 homes=${AI_SANDBOX_CLOUD_HOMES:-}
 if [ -z "$homes" ]; then
