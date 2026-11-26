@@ -24,7 +24,8 @@
       "Skill(anthropic-skills:built-in-browser)",
       "Skill(anthropic-skills:chrome-browser)",
       "Skill(dataviz)",
-      "Skill(anthropic-skills:computer-use)"
+      "Skill(anthropic-skills:computer-use)",
+      "Skill(claude-api)"
     ]
   },
   "skillOverrides": {
@@ -36,7 +37,8 @@
     "anthropic-skills:built-in-browser": "off",
     "anthropic-skills:chrome-browser": "off",
     "dataviz": "off",
-    "anthropic-skills:computer-use": "off"
+    "anthropic-skills:computer-use": "off",
+    "claude-api": "off"
   },
   "deniedMcpServers": [
     {
