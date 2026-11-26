@@ -445,6 +445,44 @@ test_cloud_bootstrap_never_fails() {
   assert_contains "$out" "download failed; continuing"
 }
 
+test_claude_lean_tools() {
+  # shellcheck source=../lib/common.sh
+  source "$AI_SANDBOX_LIB/common.sh"
+  local tpl="$REPO/templates/claude/lean-tools.json" s="$HOME/.claude/settings.json"
+  mkdir -p "$HOME/.claude"
+  echo '{"theme":"auto","permissions":{"allow":["Read"],"deny":["Bash(rm *)"]}}' > "$s"
+  assert_fails claude_lean_tools "$tpl" check-applied
+  claude_lean_tools "$tpl" check-removed
+  claude_lean_tools "$tpl" apply
+  claude_lean_tools "$tpl" check-applied
+  python3 - "$s" "$tpl" <<'PY2'
+import json, sys
+d, t = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+assert d['theme'] == 'auto' and d['permissions']['allow'] == ['Read'], d
+assert d['enableArtifact'] is False, d
+assert d['permissions']['deny'] == ['Bash(rm *)'] + t['permissions']['deny'], d
+PY2
+  local before; before=$(cat "$s"); claude_lean_tools "$tpl" apply
+  assert_eq "$(cat "$s")" "$before" "apply is idempotent"
+  claude_lean_tools "$tpl" remove
+  claude_lean_tools "$tpl" check-removed
+  python3 - "$s" <<'PY2'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d == {'theme': 'auto', 'permissions': {'allow': ['Read'], 'deny': ['Bash(rm *)']}}, d
+PY2
+}
+
+test_config_lean_tools() {
+  ai-sandbox-init-config >/dev/null
+  # shellcheck source=../lib/common.sh
+  source "$AI_SANDBOX_LIB/common.sh"; config_load
+  assert_eq "$AI_SANDBOX_LEAN_TOOLS" on
+  ai-sandbox-init-config --force AI_SANDBOX_LEAN_TOOLS=off >/dev/null
+  (config_load; assert_eq "$AI_SANDBOX_LEAN_TOOLS" off)
+  assert_fails ai-sandbox-init-config --force AI_SANDBOX_LEAN_TOOLS=maybe
+}
+
 # ------------------------------------------------------------------ main
 
 tests=$(declare -F | awk '{print $3}' | grep '^test_')

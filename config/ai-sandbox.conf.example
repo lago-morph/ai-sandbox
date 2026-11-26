@@ -31,3 +31,8 @@
 
 # How often rc-refresh.timer fast-forwards served repos (systemd time span).
 # AI_SANDBOX_REFRESH_INTERVAL=10min
+
+# on: deny the tools in templates/claude/lean-tools.json in ~/.claude/settings.json, which takes
+# them out of every session's context (the claude-code-remote MCP server, Artifact, ...).
+# off: remove those rules. See README.md.
+# AI_SANDBOX_LEAN_TOOLS=on

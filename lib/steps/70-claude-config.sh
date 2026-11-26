@@ -6,6 +6,8 @@
 # also the ai-sandbox auto mode rules in ~/.claude/settings.json (templates/claude/auto-mode.json):
 # the Claude app puts sessions it creates in auto mode regardless of --permission-mode, so these
 # rules tell auto mode's classifier that the user pre-approved everything. Otherwise they're removed.
+# With AI_SANDBOX_LEAN_TOOLS=on (default), the deny rules in templates/claude/lean-tools.json, so
+# tools sessions don't use aren't loaded into their context; with off, they're removed.
 
 _bypass_ok() {
   [ "$AI_SANDBOX_PERMISSION_MODE" = bypassPermissions ] || return 0
@@ -32,6 +34,9 @@ PY2
 _auto_mode_action() { [ "$AI_SANDBOX_PERMISSION_MODE" = bypassPermissions ] && echo applied || echo removed; }
 _auto_mode_tpl() { echo "$AI_SANDBOX_REPO_DIR/templates/claude/auto-mode.json"; }
 
+_lean_action() { [ "$AI_SANDBOX_LEAN_TOOLS" = on ] && echo applied || echo removed; }
+_lean_tpl() { echo "$AI_SANDBOX_REPO_DIR/templates/claude/lean-tools.json"; }
+
 _rendered() { local t; t=$(mktemp); render "$AI_SANDBOX_REPO_DIR/templates/claude/CLAUDE.md" > "$t"; echo "$t"; }
 
 check() {
@@ -43,6 +48,8 @@ check() {
   _bypass_ok || { info "bypassPermissions configured but skipDangerousModePermissionPrompt not set"; ok=1; }
   claude_auto_mode "$(_auto_mode_tpl)" "check-$(_auto_mode_action)" ||
     { info "ai-sandbox auto mode rules in ~/.claude/settings.json should be $(_auto_mode_action)"; ok=1; }
+  claude_lean_tools "$(_lean_tpl)" "check-$(_lean_action)" ||
+    { info "lean-tools deny rules in ~/.claude/settings.json should be $(_lean_action) (AI_SANDBOX_LEAN_TOOLS=$AI_SANDBOX_LEAN_TOOLS)"; ok=1; }
   return $ok
 }
 
@@ -57,5 +64,10 @@ apply() {
     claude_auto_mode "$(_auto_mode_tpl)" apply
   else
     claude_auto_mode "$(_auto_mode_tpl)" remove
+  fi
+  if [ "$(_lean_action)" = applied ]; then
+    claude_lean_tools "$(_lean_tpl)" apply
+  else
+    claude_lean_tools "$(_lean_tpl)" remove
   fi
 }

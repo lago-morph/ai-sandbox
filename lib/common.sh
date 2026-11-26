@@ -45,12 +45,17 @@ config_defaults() {
   : "${AI_SANDBOX_SPAWN_MODE:=worktree}"
   : "${AI_SANDBOX_PERMISSION_MODE:=}"
   : "${AI_SANDBOX_REFRESH_INTERVAL:=10min}"
+  : "${AI_SANDBOX_LEAN_TOOLS:=on}"
 }
 
 config_validate() {
   case "$AI_SANDBOX_SPAWN_MODE" in
     worktree|same-dir) ;;
     *) die "AI_SANDBOX_SPAWN_MODE must be worktree or same-dir (got '$AI_SANDBOX_SPAWN_MODE')" ;;
+  esac
+  case "$AI_SANDBOX_LEAN_TOOLS" in
+    on|off) ;;
+    *) die "AI_SANDBOX_LEAN_TOOLS must be on or off (got '$AI_SANDBOX_LEAN_TOOLS')" ;;
   esac
   case "$AI_SANDBOX_PERMISSION_MODE" in
     ''|acceptEdits|auto|bypassPermissions|default|dontAsk|plan) ;;
@@ -244,6 +249,47 @@ if allow: perms['allow'] = allow
 else: perms.pop('allow', None)
 if perms: d['permissions'] = perms
 else: d.pop('permissions', None)
+
+if action.startswith('check'):
+    sys.exit(0 if d == cur else 1)
+if d != cur:
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + '.ai-sandbox.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(d, f, indent=2); f.write('\n')
+    os.replace(tmp, p)
+PY
+}
+
+# claude_lean_tools TEMPLATE apply|remove|check-applied|check-removed
+# Manages the lean-tools settings in ~/.claude/settings.json: TEMPLATE's permissions.deny rules
+# (tools sessions don't use, removed from every session's context) and its other top-level keys
+# (enableArtifact). Other keys and the user's own deny rules are left alone; remove drops a
+# top-level key only if it still has TEMPLATE's value. check-* exits 1 if apply/remove would
+# change the file. cloud/setup.sh merges the same template in cloud containers.
+claude_lean_tools() {
+  python3 - "$@" <<'PY'
+import json, os, sys
+tpl_path, action = sys.argv[1], sys.argv[2]
+tpl = json.load(open(tpl_path))
+p = os.path.expanduser('~/.claude/settings.json')
+cur = json.load(open(p)) if os.path.exists(p) else {}
+d = json.loads(json.dumps(cur))
+install = action in ('apply', 'check-applied')
+
+ours = tpl['permissions']['deny']
+perms = d.get('permissions', {})
+deny = [e for e in perms.get('deny', []) if e not in ours]
+if install: deny += ours
+if deny: perms['deny'] = deny
+else: perms.pop('deny', None)
+if perms: d['permissions'] = perms
+else: d.pop('permissions', None)
+
+for k, v in tpl.items():
+    if k == 'permissions': continue
+    if install: d[k] = v
+    elif d.get(k) == v: d.pop(k)
 
 if action.startswith('check'):
     sys.exit(0 if d == cur else 1)
