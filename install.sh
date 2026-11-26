@@ -31,6 +31,10 @@ claude_logged_in || die "install the Claude CLI and log in first, then re-run $0
     curl -fsSL https://claude.ai/install.sh | bash
     ~/.local/bin/claude auth login"
 info "Claude CLI is installed and logged in"
+claude_rc_consented || die "enable Remote Control once, then re-run $0: run
+    ~/.local/bin/claude remote-control
+answer y to \"Enable Remote Control?\", and press Ctrl+C when it shows Ready"
+info "Remote Control is enabled"
 
 # ------------------------------------------------------------------ prompts (stdin, prompts on stderr)
 
