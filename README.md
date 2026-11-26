@@ -32,6 +32,9 @@ mkdir -p ~/src && git clone https://github.com/lago-morph/ai-sandbox.git ~/src/a
 ~/src/ai-sandbox/install.sh
 ```
 `install.sh` walks you through:
+- **Passwordless sudo:** runs `sudo setup-root.sh` first, which asks for your password. This is
+  the only time a password is needed. Then it installs the few packages it uses itself (`curl`,
+  `python3`, `git`) if they're missing; setup installs the rest, including `gh` and the Claude CLI.
 - **Host settings:** the hostname (what the environment list shows), the session name prefix
   (defaults to the hostname), the permission mode (defaults to `bypassPermissions`), and
   optionally the advanced settings. It writes `~/.config/ai-sandbox/config`.
@@ -39,11 +42,10 @@ mkdir -p ~/src && git clone https://github.com/lago-morph/ai-sandbox.git ~/src/a
   if set, or asks you to paste one (not echoed). It checks the token with GitHub before storing it.
 - **Claude login:** paste a `claude setup-token` token, or press Enter to log in through the
   browser while setup runs (recommended; skipped if you're already logged in).
-- **Passwordless sudo:** runs `sudo setup-root.sh`, which asks for your password. This is the
-  only time a password is needed.
 - **Setup:** runs `./setup.sh` (see the table below).
-- **Restart:** if the hostname or your groups changed, it offers to reboot (on WSL:
-  `wsl.exe --shutdown`). `rc@ai-sandbox` starts again at boot.
+- **Restart:** if the hostname or your groups changed, it offers to reboot; `rc@ai-sandbox`
+  starts again at boot. On WSL it prints how to restart the distro from Windows instead
+  (`wsl.exe --terminate <distro>` or `wsl.exe --shutdown`, then open the distro again).
 
 It's safe to re-run: current values are the defaults and stored secrets are kept. Later changes
 can also go through `./setup.sh` directly, which never prompts except for the Claude login.
@@ -134,9 +136,9 @@ or edit it by hand, then re-run `./setup.sh`. The repo's `host-config` skill can
 > tests but haven't been used for real: `AI_SANDBOX_HOSTNAME` outside WSL (hostnamectl,
 > cloud-init), `same-dir` spawn mode, a non-default git base dir or secrets dir, a different
 > refresh interval, and `claude-oauth-token` (it isn't confirmed that Remote Control accepts
-> setup-tokens). `install.sh` has run on WSL with an existing setup; a fresh install, EC2, and
-> its restart step (`sudo systemctl reboot`, or `wsl.exe --shutdown` run from inside WSL) are
-> untested. If you rely on one of them, please send a PR with a test once it works for you.
+> setup-tokens). `install.sh` has run on WSL with an existing setup; a fresh install, EC2 and
+> its reboot step are untested, as is `wsl.exe --terminate` (rather than `--shutdown`) for
+> applying the hostname. If you rely on one of them, please send a PR with a test once it works for you.
 
 ### Permission modes
 

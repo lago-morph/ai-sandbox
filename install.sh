@@ -4,7 +4,7 @@
 # Guided install for the user running it. Asks for the host settings (hostname, session name
 # prefix, permission mode, and optionally the advanced ones), the GitHub token and how to log in
 # to Claude; writes the host config and stores the secrets; grants passwordless sudo (asks for
-# your password once); runs ./setup.sh; and offers to restart if a change needs one.
+# your password once); runs ./setup.sh; and offers to reboot if a change needs one (on WSL, prints how to restart the distro).
 # Safe to re-run: current values are the defaults, and stored secrets are kept.
 #   --no-setup   only write the config and secrets: no sudo, no setup, no restart
 set -euo pipefail
@@ -65,6 +65,31 @@ github_login() {
     -H 'Accept: application/vnd.github+json' "$GITHUB_API/user" 2>/dev/null |
     python3 -c 'import json,sys; print(json.load(sys.stdin)["login"])' 2>/dev/null
 }
+
+# ------------------------------------------------------------------ sudo and base packages
+# First, so this script's own tools (curl, python3) are there on a minimal image. setup.sh then
+# installs the rest (gh, the Claude CLI, ...).
+
+if [ $run_setup = 1 ]; then
+  section "Passwordless sudo"
+  if sudo -n true 2>/dev/null; then
+    info "$USER already has passwordless sudo"
+  else
+    info "setup and the sessions need sudo without a password; enter your password to allow it"
+    sudo "$AI_SANDBOX_REPO_DIR/setup-root.sh"
+  fi
+  platform_load
+  missing=$(platform_missing_packages)
+  if [ -n "$missing" ]; then
+    section "Packages"
+    info "installing: $(echo $missing)"
+    # shellcheck disable=SC2086
+    platform_install_packages $missing
+  fi
+fi
+for c in git curl python3; do
+  command -v "$c" >/dev/null || die "$c is not installed (run without --no-setup to install it)"
+done
 
 # ------------------------------------------------------------------ host settings
 
@@ -199,15 +224,7 @@ if [ $run_setup = 0 ]; then
   exit 0
 fi
 
-# ------------------------------------------------------------------ sudo, setup
-
-section "Passwordless sudo"
-if sudo -n true 2>/dev/null; then
-  info "$USER already has passwordless sudo"
-else
-  info "setup and the sessions need sudo without a password; enter your password to allow it"
-  sudo "$AI_SANDBOX_REPO_DIR/setup-root.sh"
-fi
+# ------------------------------------------------------------------ setup
 
 section "Setup"
 "$AI_SANDBOX_REPO_DIR/setup.sh" || die "setup failed; fix the problem above and re-run $0 (or ./setup.sh)"
@@ -228,15 +245,13 @@ if [ ${#why[@]} = 0 ]; then
   exit 0
 fi
 info "a restart is needed so that: $(IFS=';'; echo "${why[*]}" | sed 's/;/; /g')"
-info "the $entry server starts again by itself afterwards"
 if is_wsl; then
-  if command -v wsl.exe >/dev/null && ask_yn "Restart WSL now with 'wsl.exe --shutdown'? It stops every WSL distro." y; then
-    log "restarting WSL; reopen the distro afterwards. $done_msg"
-    wsl.exe --shutdown
-  else
-    log "run 'wsl.exe --shutdown' from Windows, then reopen the distro. After that: $done_msg"
-  fi
-elif ask_yn "Reboot now?" y; then
+  distro=${WSL_DISTRO_NAME:-<distro>}
+  log "restart this distro to finish. From Windows (PowerShell or cmd):"
+  log "    wsl.exe --terminate $distro      (or wsl.exe --shutdown, which stops every distro)"
+  log "then open the distro again (Start menu, Windows Terminal, or: wsl.exe -d $distro)."
+  log "The server only runs while the distro is running. After that: $done_msg"
+elif info "the $entry server starts again by itself after a reboot"; ask_yn "Reboot now?" y; then
   log "rebooting; reconnect in a minute or two. $done_msg"
   sudo systemctl reboot
 else
