@@ -18,10 +18,10 @@ Other distros need a small platform file; see [Contributing](#contributing).
 
 ## QuickStart
 
-These are the defaults I use. Steps 1-4 are done in a terminal on the machine.
+These are the defaults I use. Steps 1-5 are done in a terminal on the machine.
 
 **Prerequisites**
-- Ubuntu with systemd as PID 1, and a user with `sudo`. On WSL2, setup turns systemd on for
+- Ubuntu with systemd as PID 1, and a user with `sudo` (you'll need its password once). On WSL2, setup turns systemd on for
   you and asks you to restart WSL. On EC2, the default `ubuntu` user is fine.
 - A Claude subscription (Remote Control needs a claude.ai login).
 - A GitHub [fine-grained personal access token](https://github.com/settings/personal-access-tokens)
@@ -33,14 +33,22 @@ These are the defaults I use. Steps 1-4 are done in a terminal on the machine.
 mkdir -p ~/src && git clone https://github.com/lago-morph/ai-sandbox.git ~/src/ai-sandbox
 ```
 
-**2. Add secrets**
+**2. Allow passwordless sudo** (the only step that needs you to type a password)
+```bash
+sudo ~/src/ai-sandbox/setup-root.sh
+```
+This writes `/etc/sudoers.d/<you>` (`NOPASSWD:ALL`, validated with `visudo`) so `./setup.sh` and
+the sessions can use sudo unattended. Setup stops and points you here if it's missing. On EC2
+the default `ubuntu` user already has it; running the script anyway is harmless.
+
+**3. Add secrets**
 ```bash
 install -d -m 700 ~/.secrets
 install -m 600 /dev/null ~/.secrets/github
 nano ~/.secrets/github        # paste the GitHub token; avoids leaving it in shell history
 ```
 
-**3. Create the host config** (stored at `~/.config/ai-sandbox/config`, outside the repo)
+**4. Create the host config** (stored at `~/.config/ai-sandbox/config`, outside the repo)
 ```bash
 ~/src/ai-sandbox/bin/ai-sandbox-init-config \
   AI_SANDBOX_HOSTNAME=laptop \
@@ -48,7 +56,7 @@ nano ~/.secrets/github        # paste the GitHub token; avoids leaving it in she
   AI_SANDBOX_PERMISSION_MODE=bypassPermissions
 ```
 
-**4. Run setup**
+**5. Run setup**
 ```bash
 cd ~/src/ai-sandbox && ./setup.sh
 ```
@@ -56,7 +64,7 @@ If you're not logged in to Claude yet, setup starts `claude auth login`; follow 
 setup continues. It's safe to re-run at any time. On WSL, a new hostname takes effect after
 `wsl.exe --shutdown` from Windows; setup tells you when that's still needed.
 
-**5. Connect.** Open [claude.ai/code](https://claude.ai/code) or the Claude app, pick the
+**6. Connect.** Open [claude.ai/code](https://claude.ai/code) or the Claude app, pick the
 `laptop ai-sandbox` environment, and start a session. To work on another repo, ask that session
 to serve it ("serve lago-morph/cloud-app"), then start sessions in its `laptop cloud-app`
 environment.
@@ -65,7 +73,7 @@ environment.
 
 | Step | What it ensures |
 |---|---|
-| `00-platform` | Supported distro, systemd as PID 1 with a user manager, sudo. Enables systemd on WSL if needed. |
+| `00-platform` | Supported distro, systemd as PID 1 with a user manager, passwordless sudo (from `setup-root.sh`). Enables systemd on WSL if needed. |
 | `10-packages` | `git`, `curl`, CA certificates, `python3`, and `gh` (from GitHub's apt repo). |
 | `12-groups` | The user is in the `kvm` group (created if missing), for `/dev/kvm`. Takes effect after a restart. |
 | `15-hostname` | With `AI_SANDBOX_HOSTNAME`: on WSL, `[network] hostname` and `generateHosts = false` in `/etc/wsl.conf`; elsewhere, `hostnamectl` and cloud-init's `preserve_hostname`. Both: the `127.0.1.1` line in `/etc/hosts`. Originals kept as `*.bak-ai-sandbox`. |
@@ -150,6 +158,8 @@ permission mode, setup removes these entries. `claude auto-mode config` shows th
 
 - Remote Control only makes outbound HTTPS connections; no inbound ports are needed. On EC2,
   the security group can deny all inbound traffic (use SSM or a temporary SSH rule for setup).
+- `setup-root.sh` gives the sandbox user passwordless sudo, so sessions effectively run as root
+  whenever they choose to.
 - `bypassPermissions` (and the auto mode pre-approval rules it installs) lets sessions run any
   command as your user without asking, and this user usually has sudo. That's the point of a personal sandbox, but use a machine and a GitHub token
   you're comfortable handing to an agent. A fine-grained token limited to specific repos is best.
@@ -172,6 +182,7 @@ permission mode, setup removes these entries. `claude auto-mode config` shows th
 
 ```
 setup.sh                  entry point (--check for report-only)
+setup-root.sh             run once with sudo: passwordless sudo for the sandbox user
 bin/                      commands installed to ~/.local/bin
   rc-start, rc-refresh      serve a repo / fast-forward served repos
   ai-sandbox-rc             ExecStart of rc@<repo>: runs `claude remote-control` with the config

@@ -40,10 +40,10 @@ assert_fails()    { if "$@" >/dev/null 2>&1; then echo "expected failure: $*"; r
 # ------------------------------------------------------------------ tests
 
 test_lint() {
-  bash -n "$REPO/setup.sh"
+  bash -n "$REPO/setup.sh"; bash -n "$REPO/setup-root.sh"
   for f in "$REPO"/bin/* "$REPO"/lib/*.sh "$REPO"/lib/*/*.sh "$REPO"/tests/*.sh; do bash -n "$f"; done
   if command -v shellcheck >/dev/null; then
-    (cd "$REPO" && shellcheck -x -S warning setup.sh bin/* lib/*.sh lib/*/*.sh tests/*.sh)
+    (cd "$REPO" && shellcheck -x -S warning setup.sh setup-root.sh bin/* lib/*.sh lib/*/*.sh tests/*.sh)
   else
     echo "(shellcheck not installed; syntax only)"
   fi
@@ -221,6 +221,22 @@ import json, sys
 d = json.load(open(sys.argv[1]))
 assert d == {'theme': 'auto', 'permissions': {'allow': ['Read']}, 'autoMode': {'allow': ['$defaults', 'Mine: keep']}}, d
 PY
+}
+
+test_setup_root_sudoers() {
+  export AI_SANDBOX_SUDOERS_DIR="$T/sudoers.d"; mkdir -p "$AI_SANDBOX_SUDOERS_DIR"
+  local me; me=$(id -un)
+  assert_fails "$REPO/setup-root.sh" --check "$me"
+  assert_fails "$REPO/setup-root.sh" root
+  assert_fails "$REPO/setup-root.sh" 'bad name'
+  assert_fails "$REPO/setup-root.sh" no-such-user-xyz
+  if ! command -v visudo >/dev/null; then echo "(visudo not installed; skipping apply)"; return 0; fi
+  echo "$me ALL=(ALL) NOPASSWD:ALL" > "$AI_SANDBOX_SUDOERS_DIR/$me"   # a hand-made one gets adopted
+  "$REPO/setup-root.sh" "$me" >/dev/null
+  "$REPO/setup-root.sh" --check "$me" >/dev/null
+  assert_eq "$(stat -c %a "$AI_SANDBOX_SUDOERS_DIR/$me")" 440
+  assert_contains "$(cat "$AI_SANDBOX_SUDOERS_DIR/$me")" "$me ALL=(ALL) NOPASSWD:ALL"
+  [ -f "$AI_SANDBOX_SUDOERS_DIR/$me.bak-ai-sandbox" ]
 }
 
 test_rendered_units() {

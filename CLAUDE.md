@@ -24,6 +24,8 @@ Read README.md for what setup does, the config keys, and the layout.
   apply it with setup. Don't hand-edit the host and stop there.
 - Host config: `~/.config/ai-sandbox/config` (see the `host-config` skill). Secrets: through the
   backend only (`ai-sandbox-secret has|describe NAME`). Never print a secret's value.
+- Anything that needs root before passwordless sudo exists goes in `setup-root.sh`, which the
+  user runs once with `sudo` (sessions can't type a password). Everything else is a setup step.
 - The host only changes when `./setup.sh` runs. Run `./setup.sh --check` first and show the user
   what will change. Run setup from the main checkout once changes are merged, or from a worktree
   to try out unmerged changes (tell the user if you do).
