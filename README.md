@@ -103,7 +103,7 @@ setup tells you when that's still needed.
 | `40-secrets` | Secrets storage is private (700/600) and the GitHub token is present. |
 | `50-github` | `git` gets the token from `ai-sandbox-git-credential` for github.com; `gh` is logged in with it; if git has no commit identity, it uses the token's GitHub account and noreply email. |
 | `60-claude-auth` | Claude is logged in to claude.ai; if not, it runs `claude auth login` (in a terminal). |
-| `70-claude-config` | A managed block of host conventions in `~/.claude/CLAUDE.md`; this repo trusted; Remote Control's one-time "Enable Remote Control?" answered yes for you (`remoteDialogSeen` in `~/.claude.json`), since a server under systemd can't answer it and exits. With `bypassPermissions`: the dangerous-mode warning pre-accepted, and the ai-sandbox auto mode rules plus a `Bash` allow rule in `~/.claude/settings.json` (see [Permission modes](#permission-modes)). |
+| `70-claude-config` | A managed block of host conventions in `~/.claude/CLAUDE.md`; this repo trusted; Remote Control's one-time "Enable Remote Control?" answered yes for you (`remoteDialogSeen` in `~/.claude.json`), since a server under systemd can't answer it and exits. With `bypassPermissions`: the dangerous-mode warning pre-accepted, and the ai-sandbox auto mode rules plus a `Bash` allow rule in `~/.claude/settings.json` (see [Permission modes](#permission-modes)). With `AI_SANDBOX_LEAN_TOOLS=on`: the lean-tools deny rules and `enableArtifact: false` in `~/.claude/settings.json`. |
 | `80-systemd` | Lingering, the `rc@` unit template, `rc-refresh.timer`, and `rc@ai-sandbox` enabled at boot and running (it must stay up for a few seconds; otherwise setup shows its last output). |
 
 ### Day to day
@@ -142,6 +142,7 @@ or edit it by hand, then re-run `./setup.sh`. The repo's `host-config` skill can
 | `AI_SANDBOX_SPAWN_MODE` | `worktree` | `worktree`: each session gets its own git worktree. `same-dir`: sessions share the main checkout. |
 | `AI_SANDBOX_PERMISSION_MODE` | empty | Permission mode for new sessions (`bypassPermissions`, `acceptEdits`, `auto`, `default`, `dontAsk`, `plan`). Empty: use `~/.claude/settings.json`. The Claude app can override it; see [Permission modes](#permission-modes). |
 | `AI_SANDBOX_REFRESH_INTERVAL` | `10min` | How often served repos are fast-forwarded (systemd time span). |
+| `AI_SANDBOX_LEAN_TOOLS` | `on` | `on`: the deny rules in `templates/claude/lean-tools.json` go into `~/.claude/settings.json`, so tools sessions don't use aren't loaded into their context (see [Fewer unused tools](#cloud-sessions-fewer-unused-tools)). `off`: those rules are removed. |
 
 **Secrets** (names as used by the backend; with `file`, these are file names in the secrets dir):
 
@@ -192,6 +193,12 @@ uses one list:
 - To change the list, edit `lean-tools.json` and merge. New containers pick it up; resumed
   sessions keep what they started with.
 - For a session that needs a denied tool, use an environment without the setup script.
+- On a sandbox host, setup applies the same file to `~/.claude/settings.json` (step
+  `70-claude-config`, `AI_SANDBOX_LEAN_TOOLS`), so it covers Remote Control and local CLI
+  sessions. New sessions get it; running sessions keep their tools until they restart. A deny
+  rule in user settings can't be lifted for one session: set `AI_SANDBOX_LEAN_TOOLS=off` and
+  re-run setup, or start a local session with `claude --setting-sources project,local` (which
+  skips all user settings).
 - Whatever is on `main` runs as root in every new cloud container, so keep these files free
   of secrets and review changes to them.
 
