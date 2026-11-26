@@ -15,6 +15,14 @@ secrets_backend_get() {
   tr -d '[:space:]' < "$(secrets_file_path "$1")"
 }
 
+secrets_backend_set() {
+  local tmp
+  [ -d "$AI_SANDBOX_SECRETS_DIR" ] || { mkdir -p "$AI_SANDBOX_SECRETS_DIR"; chmod 700 "$AI_SANDBOX_SECRETS_DIR"; }
+  tmp=$(mktemp "$AI_SANDBOX_SECRETS_DIR/.$1.XXXXXX")   # mktemp creates it 600
+  cat > "$tmp"
+  mv -f "$tmp" "$(secrets_file_path "$1")"
+}
+
 secrets_backend_describe() { printf 'file %s' "$(secrets_file_path "$1")"; }
 
 secrets_backend_check() {
