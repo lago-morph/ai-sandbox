@@ -264,8 +264,8 @@ PY
 # claude_lean_tools TEMPLATE apply|remove|check-applied|check-removed
 # Manages the lean-tools settings in ~/.claude/settings.json: TEMPLATE's permissions.deny rules
 # (tools sessions don't use, removed from every session's context) and its other top-level keys
-# (enableArtifact). Other keys and the user's own deny rules are left alone; remove drops a
-# top-level key only if it still has TEMPLATE's value. check-* exits 1 if apply/remove would
+# (enableArtifact; skillOverrides, merged per entry). Other keys and the user's own entries are
+# left alone; remove drops a key or entry only if it still has TEMPLATE's value. check-* exits 1 if apply/remove would
 # change the file. cloud/setup.sh merges the same template in cloud containers.
 claude_lean_tools() {
   python3 - "$@" <<'PY'
@@ -288,7 +288,14 @@ else: d.pop('permissions', None)
 
 for k, v in tpl.items():
     if k == 'permissions': continue
-    if install: d[k] = v
+    if isinstance(v, dict):  # e.g. skillOverrides: merge per entry, keep the user's own
+        sub = d.get(k, {})
+        for kk, vv in v.items():
+            if install: sub[kk] = vv
+            elif sub.get(kk) == vv: sub.pop(kk)
+        if sub: d[k] = sub
+        else: d.pop(k, None)
+    elif install: d[k] = v
     elif d.get(k) == v: d.pop(k)
 
 if action.startswith('check'):
