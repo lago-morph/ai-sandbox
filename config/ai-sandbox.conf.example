@@ -6,7 +6,7 @@
 # AI_SANDBOX_GIT_BASEDIR=$HOME/src
 
 # Where secrets come from. Only "file" exists today: one file per secret in
-# AI_SANDBOX_SECRETS_DIR (github = GitHub PAT, claude-oauth-token = optional setup-token).
+# AI_SANDBOX_SECRETS_DIR (github = GitHub PAT).
 # AI_SANDBOX_SECRETS_BACKEND=file
 # AI_SANDBOX_SECRETS_DIR=$HOME/.secrets
 

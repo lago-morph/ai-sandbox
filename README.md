@@ -26,22 +26,35 @@ Other distros need a small platform file; see [Contributing](#contributing).
   for the repos you'll work on. For pushing and opening PRs, give it read/write on Contents
   and Pull requests (and Actions/Workflows if you want sessions to work with CI).
 
-**1. Clone and install**, as the user the sandbox is for, in a terminal on the machine:
+In a terminal on the machine, as the user the sandbox is for:
+
+**1. Clone this repo**
 ```bash
 mkdir -p ~/src && git clone https://github.com/lago-morph/ai-sandbox.git ~/src/ai-sandbox
+```
+
+**2. Install the Claude CLI and log in.** Remote Control needs a full claude.ai login; it
+rejects tokens from `claude setup-token`. Over SSH, the login prints a URL to open in any
+browser and asks you to paste back the code.
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+~/.local/bin/claude auth login
+```
+
+**3. Run the installer**
+```bash
 ~/src/ai-sandbox/install.sh
 ```
-`install.sh` walks you through:
+It stops with these instructions if Claude isn't installed and logged in yet. Then it walks you
+through:
 - **Passwordless sudo:** runs `sudo setup-root.sh` first, which asks for your password. This is
   the only time a password is needed. Then it installs the few packages it uses itself (`curl`,
-  `python3`, `git`) if they're missing; setup installs the rest, including `gh` and the Claude CLI.
+  `python3`, `git`) if they're missing; setup installs the rest, including `gh`.
 - **Host settings:** the hostname (what the environment list shows), the session name prefix
   (defaults to the hostname), the permission mode (defaults to `bypassPermissions`), and
   optionally the advanced settings. It writes `~/.config/ai-sandbox/config`.
 - **GitHub token:** keeps one already in `~/.secrets/github`, offers `$GH_TOKEN`/`$GITHUB_TOKEN`
   if set, or asks you to paste one or the path of a file holding it (not echoed). It checks the token with GitHub before storing it.
-- **Claude login:** paste a `claude setup-token` token (or the path of a file holding it), or press Enter to log in through the
-  browser while setup runs (recommended; skipped if you're already logged in).
 - **Setup:** runs `./setup.sh` (see the table below).
 - **Restart:** if the hostname or your groups changed, it offers to reboot; `rc@ai-sandbox`
   starts again at boot. On WSL it prints how to restart the distro from Windows instead
@@ -50,16 +63,17 @@ mkdir -p ~/src && git clone https://github.com/lago-morph/ai-sandbox.git ~/src/a
 Everything it and setup print also goes to a log, `~/.local/state/ai-sandbox/install.log`
 (setup on its own: `setup.log`); each links to the latest timestamped file next to it.
 It's safe to re-run: current values are the defaults and stored secrets are kept. Later changes
-can also go through `./setup.sh` directly, which never prompts except for the Claude login.
+can also go through `./setup.sh` directly, which never prompts (except to log in to Claude, if
+the login has gone).
 
-**2. Connect.** Open [claude.ai/code](https://claude.ai/code) or the Claude app, pick the
+**4. Connect.** Open [claude.ai/code](https://claude.ai/code) or the Claude app, pick the
 `<hostname> ai-sandbox` environment, and start a session. To work on another repo, ask that
 session to serve it ("serve lago-morph/cloud-app"), then start sessions in its
 `<hostname> cloud-app` environment.
 
 ### Manual install
 
-The same steps without the prompts:
+The same steps without the prompts, after steps 1 and 2:
 ```bash
 sudo ~/src/ai-sandbox/setup-root.sh                   # passwordless sudo: /etc/sudoers.d/<you>
 printf '%s' "$TOKEN" | ~/src/ai-sandbox/bin/ai-sandbox-secret set github   # or: ai-sandbox-secret set github, and paste
@@ -68,7 +82,7 @@ printf '%s' "$TOKEN" | ~/src/ai-sandbox/bin/ai-sandbox-secret set github   # or:
 cd ~/src/ai-sandbox && ./setup.sh
 ```
 `setup-root.sh` writes `/etc/sudoers.d/<you>` (`NOPASSWD:ALL`, validated with `visudo`); setup
-stops and points you to it if it's missing. If you're not logged in to Claude yet, setup starts
+stops and points you to it if it's missing. If you're not logged in to Claude, setup starts
 `claude auth login`. On WSL, a new hostname takes effect after `wsl.exe --shutdown` from Windows;
 setup tells you when that's still needed.
 
@@ -84,7 +98,7 @@ setup tells you when that's still needed.
 | `30-install` | This repo's `bin/` commands in `~/.local/bin`; `lib/`, `config/`, `templates/` in `~/.local/share/ai-sandbox`. |
 | `40-secrets` | Secrets storage is private (700/600) and the GitHub token is present. |
 | `50-github` | `git` gets the token from `ai-sandbox-git-credential` for github.com; `gh` is logged in with it; if git has no commit identity, it uses the token's GitHub account and noreply email. |
-| `60-claude-auth` | Claude is logged in (or a setup-token is present; see below). |
+| `60-claude-auth` | Claude is logged in to claude.ai; if not, it runs `claude auth login` (in a terminal). |
 | `70-claude-config` | A managed block of host conventions in `~/.claude/CLAUDE.md`; this repo trusted. With `bypassPermissions`: the dangerous-mode warning pre-accepted, and the ai-sandbox auto mode rules plus a `Bash` allow rule in `~/.claude/settings.json` (see [Permission modes](#permission-modes)). |
 | `80-systemd` | Lingering, the `rc@` unit template, `rc-refresh.timer`, and `rc@ai-sandbox` enabled at boot and running. |
 
@@ -130,18 +144,16 @@ or edit it by hand, then re-run `./setup.sh`. The repo's `host-config` skill can
 | Secret | Required | Used for |
 |---|---|---|
 | `github` | yes | git over HTTPS to github.com, and `gh`. Read at use time; after rotating it, re-run `./setup.sh` so `gh` picks it up too. |
-| `claude-oauth-token` | no | A token from `claude setup-token`, passed to Remote Control servers instead of the interactive login. |
 
-> **Untested configurations.** Only the defaults above plus `AI_SANDBOX_NAME_PREFIX`,
-> `AI_SANDBOX_PERMISSION_MODE=bypassPermissions` and `AI_SANDBOX_HOSTNAME` on WSL run on a real
-> host today. (`AI_SANDBOX_HOSTNAME` on WSL: the files are verified, but the environment list
-> showing the new name after `wsl.exe --shutdown` is not confirmed yet.) These work in the unit
-> tests but haven't been used for real: `AI_SANDBOX_HOSTNAME` outside WSL (hostnamectl,
-> cloud-init), `same-dir` spawn mode, a non-default git base dir or secrets dir, a different
-> refresh interval, and `claude-oauth-token` (it isn't confirmed that Remote Control accepts
-> setup-tokens). `install.sh` has run on WSL with an existing setup; a fresh install, EC2 and
-> its reboot step are untested, as is `wsl.exe --terminate` (rather than `--shutdown`) for
-> applying the hostname. If you rely on one of them, please send a PR with a test once it works for you.
+> **Untested configurations.** Run on a real host: the defaults above plus
+> `AI_SANDBOX_NAME_PREFIX` and `AI_SANDBOX_PERMISSION_MODE=bypassPermissions`; `AI_SANDBOX_HOSTNAME`
+> on WSL (the files are verified, but the environment list showing the new name after
+> `wsl.exe --shutdown` is not confirmed yet) and on EC2 (hostnamectl and cloud-init; the name
+> survives a reboot); `AI_SANDBOX_GIT_BASEDIR=~/code`; and `install.sh` on a fresh EC2 Ubuntu
+> 26.04 instance, including its reboot. These work in the unit tests but haven't been used for
+> real: `same-dir` spawn mode, a non-default secrets dir, a different refresh interval, and
+> `wsl.exe --terminate` (rather than `--shutdown`) for applying the hostname on WSL. If you rely on
+> one of them, please send a PR with a test once it works for you.
 
 ### Permission modes
 

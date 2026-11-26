@@ -90,10 +90,10 @@ test_init_config_refuses_overwrite_and_bad_input() {
 test_secret_file_backend() {
   ai-sandbox-init-config >/dev/null
   printf '  tok-123 \n' > "$HOME/.secrets/github"; chmod 600 "$HOME/.secrets/github"
-  : > "$HOME/.secrets/claude-oauth-token"
+  : > "$HOME/.secrets/other"
   ai-sandbox-secret has github
   assert_eq "$(ai-sandbox-secret get github)" tok-123
-  assert_fails ai-sandbox-secret has claude-oauth-token   # empty file counts as missing
+  assert_fails ai-sandbox-secret has other   # empty file counts as missing
   assert_fails ai-sandbox-secret get missing
   assert_eq "$(ai-sandbox-secret describe github)" "file $HOME/.secrets/github"
 }
@@ -125,15 +125,35 @@ test_secret_set() {
 
 # A fake GitHub API (file://) that knows one account; tokens aren't checked by it.
 fake_github() { mkdir -p "$T/api"; echo '{"login":"octo"}' > "$T/api/user"; export AI_SANDBOX_GITHUB_API="file://$T/api"; }
+# A fake Claude CLI whose `auth status` reports logged in (true) or not (false).
+fake_claude() {
+  mkdir -p "$HOME/.local/bin"
+  printf '#!/bin/sh\n[ "$1 $2" = "auth status" ] && echo %s\n' "'{\"loggedIn\": ${1:-true}}'" > "$HOME/.local/bin/claude"
+  chmod +x "$HOME/.local/bin/claude"
+}
+
+test_install_requires_claude_login() {
+  fake_github
+  local out
+  out=$(printf 'box1\n\n\n\ny\ntok-1\n' | "$REPO/install.sh" --no-setup 2>&1) && { echo "should fail"; return 1; }
+  assert_contains "$out" "curl -fsSL https://claude.ai/install.sh | bash"
+  assert_contains "$out" "claude auth login"
+  fake_claude false
+  assert_fails sh -c "printf 'box1\n\n\n\ny\ntok-1\n' | '$REPO/install.sh' --no-setup"
+  [ ! -e "$XDG_CONFIG_HOME/ai-sandbox/config" ]
+  fake_claude true
+  printf 'box1\n\n\n\ny\ntok-1\n' | env -u GH_TOKEN -u GITHUB_TOKEN "$REPO/install.sh" --no-setup >/dev/null 2>&1
+  [ -e "$XDG_CONFIG_HOME/ai-sandbox/config" ]
+}
 
 test_install_fresh() {
-  fake_github
-  # hostname, prefix (default), mode (default), advanced? n, write? y, GitHub token, Claude: browser
+  fake_github; fake_claude
+  # hostname, prefix (default), mode (default), advanced? n, write? y, GitHub token
   local out
-  out=$(printf 'box1\n\n\n\ny\ntok-1\n\n' | env -u GH_TOKEN -u GITHUB_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
+  out=$(printf 'box1\n\n\n\ny\ntok-1\n' | env -u GH_TOKEN -u GITHUB_TOKEN \
     "$REPO/install.sh" --no-setup 2>&1)
   assert_contains "$out" "stored the token for GitHub user octo"
-  assert_contains "$out" "setup will start 'claude auth login'"
+  assert_contains "$out" "Claude CLI is installed and logged in"
   # shellcheck source=../lib/common.sh
   source "$AI_SANDBOX_LIB/common.sh"; config_load
   assert_eq "$AI_SANDBOX_HOSTNAME" box1
@@ -141,7 +161,6 @@ test_install_fresh() {
   assert_eq "$AI_SANDBOX_PERMISSION_MODE" bypassPermissions
   assert_eq "$AI_SANDBOX_GIT_BASEDIR" "$(dirname "$(dirname "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)")")"
   assert_eq "$(ai-sandbox-secret get github)" tok-1
-  assert_fails ai-sandbox-secret has claude-oauth-token
   if grep -q tok-1 <<<"$out"; then echo "token echoed"; return 1; fi
   # Everything went to a private log as well, without the token.
   local logf; logf=$(readlink -f "$HOME/.local/state/ai-sandbox/install.log")
@@ -152,13 +171,11 @@ test_install_fresh() {
 }
 
 test_install_tokens_from_files() {
-  fake_github
-  printf 'tok-file\n' > "$T/gh-token"; printf 'sk-from-file' > "$HOME/claude-setup-token"
-  # Empty hostname answer: the current hostname is the default.
-  printf '\n\n\n\ny\n%s\n~/claude-setup-token\n' "$T/gh-token" | env -u GH_TOKEN -u GITHUB_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
-    "$REPO/install.sh" --no-setup >/dev/null 2>&1
+  fake_github; fake_claude
+  printf 'tok-file\n' > "$HOME/gh-token"
+  # Empty hostname answer: the current hostname is the default. The token is given as ~/path.
+  printf '\n\n\n\ny\n~/gh-token\n' | env -u GH_TOKEN -u GITHUB_TOKEN "$REPO/install.sh" --no-setup >/dev/null 2>&1
   assert_eq "$(ai-sandbox-secret get github)" tok-file
-  assert_eq "$(ai-sandbox-secret get claude-oauth-token)" sk-from-file
   # shellcheck source=../lib/common.sh
   source "$AI_SANDBOX_LIB/common.sh"; config_load
   assert_eq "$AI_SANDBOX_HOSTNAME" "$(hostname -s | tr '[:upper:]' '[:lower:]')"
@@ -169,28 +186,23 @@ test_install_tokens_from_files() {
 }
 
 test_install_rerun_keeps_values() {
-  fake_github
-  printf 'box1\npfx\nauto\n\ny\ntok-1\n\n' | env -u GH_TOKEN -u GITHUB_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
-    "$REPO/install.sh" --no-setup >/dev/null 2>&1
-  # All defaults: the existing config and token are kept; this time store a setup-token.
+  fake_github; fake_claude
+  printf 'box1\npfx\nauto\n\ny\ntok-1\n' | env -u GH_TOKEN -u GITHUB_TOKEN "$REPO/install.sh" --no-setup >/dev/null 2>&1
+  # All defaults: the existing config and token are kept.
   local out
-  out=$(printf '\n\n\n\ny\nsk-claude-1\n' | env -u GH_TOKEN -u GITHUB_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
-    "$REPO/install.sh" --no-setup 2>&1)
+  out=$(printf '\n\n\n\ny\n' | env -u GH_TOKEN -u GITHUB_TOKEN "$REPO/install.sh" --no-setup 2>&1)
   assert_contains "$out" "using the stored token for GitHub user octo"
   # shellcheck source=../lib/common.sh
   source "$AI_SANDBOX_LIB/common.sh"; config_load
   assert_eq "$AI_SANDBOX_HOSTNAME" box1
   assert_eq "$AI_SANDBOX_NAME_PREFIX" pfx
   assert_eq "$AI_SANDBOX_PERMISSION_MODE" auto
-  assert_eq "$(ai-sandbox-secret get claude-oauth-token)" sk-claude-1
-  # Third run: the setup-token is reused without asking.
-  out=$(printf '\n\n\n\ny\n' | "$REPO/install.sh" --no-setup 2>&1)
-  assert_contains "$out" "using the setup-token stored in"
+  assert_eq "$(ai-sandbox-secret get github)" tok-1
 }
 
 test_install_token_from_env_and_rejected() {
   # GitHub unreachable/rejecting: a token from GH_TOKEN is refused, then an empty paste aborts.
-  export AI_SANDBOX_GITHUB_API="file://$T/nowhere"
+  export AI_SANDBOX_GITHUB_API="file://$T/nowhere"; fake_claude
   local out
   out=$(printf 'box1\n\n\n\ny\ny\n\n' | GH_TOKEN=tok-env env -u GITHUB_TOKEN "$REPO/install.sh" --no-setup 2>&1) &&
     { echo "should fail"; return 1; }
@@ -199,13 +211,12 @@ test_install_token_from_env_and_rejected() {
   assert_fails ai-sandbox-secret has github
   # Accepted from the environment.
   fake_github
-  out=$(printf 'box1\n\n\n\ny\ny\n\n' | GH_TOKEN=tok-env env -u GITHUB_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
-    "$REPO/install.sh" --no-setup 2>&1)
+  out=$(printf 'box1\n\n\n\ny\ny\n' | GH_TOKEN=tok-env env -u GITHUB_TOKEN "$REPO/install.sh" --no-setup 2>&1)
   assert_eq "$(ai-sandbox-secret get github)" tok-env
 }
 
 test_install_validates_answers() {
-  fake_github
+  fake_github; fake_claude
   # A bad hostname and bad mode are re-asked; a checkout dir that doesn't hold the repo aborts.
   local out
   out=$(printf 'Bad_Name\nbox2\n\nnope\n\ny\n/elsewhere\n\n\n\n' | "$REPO/install.sh" --no-setup 2>&1) &&

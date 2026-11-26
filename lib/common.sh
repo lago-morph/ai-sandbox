@@ -10,8 +10,6 @@ AI_SANDBOX_UNIT_DIR=${AI_SANDBOX_UNIT_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/sys
 # Names of secrets, as passed to secret_get / secret_has.
 # shellcheck disable=SC2034  # used by scripts that source this file
 SECRET_GITHUB=github                 # GitHub fine-grained PAT (required)
-# shellcheck disable=SC2034
-SECRET_CLAUDE_TOKEN=claude-oauth-token # token from `claude setup-token` (optional)
 
 log()  { printf '%s\n' "$*" >&2; }
 info() { printf '   %s\n' "$*" >&2; }
@@ -121,6 +119,14 @@ platform_load() {
 is_wsl() { grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; }
 
 # ---------------------------------------------------------------- claude files
+
+# Exit 0 if the Claude CLI is installed and logged in (Remote Control needs a full claude.ai
+# login: it rejects `claude setup-token` tokens as inference-only).
+claude_logged_in() {
+  [ -x "$AI_SANDBOX_BIN/claude" ] || return 1
+  "$AI_SANDBOX_BIN/claude" auth status --json 2>/dev/null |
+    python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("loggedIn") else 1)' 2>/dev/null
+}
 
 # Marks a directory trusted in ~/.claude.json (the workspace trust dialog), atomically.
 claude_trust_dir() {
