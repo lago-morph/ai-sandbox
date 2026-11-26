@@ -1,0 +1,15 @@
+# Deliberately fails, to check that a failed run's status and logs can be read.
+name: Always fails
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  fail:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "About to fail on purpose"
+          exit 1
