@@ -2,8 +2,8 @@
 # Usage: cloud/setup.sh   (run by cloud/bootstrap.sh, as root, in a claude.ai/code container)
 # Merges templates/claude/lean-tools.json into ~/.claude/settings.json for root and every user
 # with a home under /home, so tools no session uses aren't loaded into every session's context.
-# Existing settings are kept: deny rules are added (no duplicates), objects such as
-# skillOverrides are merged per entry, other keys are set.
+# Existing settings are kept: deny rules and lists such as deniedMcpServers are added to
+# (no duplicates), objects such as skillOverrides are merged per entry, other keys are set.
 #   AI_SANDBOX_CLOUD_BASE   URL of the repo's raw files (set by bootstrap.sh)
 #   AI_SANDBOX_LEAN_TOOLS   local lean-tools.json to use instead of downloading it (tests)
 #   AI_SANDBOX_CLOUD_HOMES  space-separated home dirs to update (default: /root and /home/*)
@@ -37,6 +37,9 @@ for k, v in lean.items():
             have.extend(r for r in rules if r not in have)
     elif isinstance(v, dict):  # e.g. skillOverrides: merge per entry
         cur.setdefault(k, {}).update(v)
+    elif isinstance(v, list):  # e.g. deniedMcpServers: add missing entries
+        have = cur.setdefault(k, [])
+        have.extend(e for e in v if e not in have)
     else:
         cur[k] = v
 os.makedirs(os.path.dirname(dst), exist_ok=True)

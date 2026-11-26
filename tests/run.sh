@@ -413,7 +413,7 @@ test_setup_requires_config() {
 test_cloud_setup_merges_lean_tools() {
   # cloud/setup.sh adds the lean deny rules to existing settings, keeps the rest, and is idempotent.
   mkdir -p "$HOME/.claude"
-  echo '{"model": "opus", "permissions": {"deny": ["Artifact", "Bash(rm *)"], "allow": ["Read"]}, "skillOverrides": {"mine": "name-only"}}' > "$HOME/.claude/settings.json"
+  echo '{"model": "opus", "permissions": {"deny": ["Artifact", "Bash(rm *)"], "allow": ["Read"]}, "skillOverrides": {"mine": "name-only"}, "deniedMcpServers": [{"serverName": "mine"}]}' > "$HOME/.claude/settings.json"
   export AI_SANDBOX_LEAN_TOOLS=$REPO/templates/claude/lean-tools.json AI_SANDBOX_CLOUD_HOMES=$HOME
   "$REPO/cloud/setup.sh" >/dev/null
   "$REPO/cloud/setup.sh" >/dev/null
@@ -427,6 +427,7 @@ assert 'Bash(rm *)' in deny and 'mcp__claude-code-remote__*' in deny, deny
 assert len(deny) == len(set(deny)), deny
 assert set(lean['permissions']['deny']) <= set(deny), deny
 assert d['skillOverrides'] == {'mine': 'name-only', **lean['skillOverrides']}, d
+assert d['deniedMcpServers'] == [{'serverName': 'mine'}] + lean['deniedMcpServers'], d
 PY2
 }
 
@@ -451,7 +452,7 @@ test_claude_lean_tools() {
   source "$AI_SANDBOX_LIB/common.sh"
   local tpl="$REPO/templates/claude/lean-tools.json" s="$HOME/.claude/settings.json"
   mkdir -p "$HOME/.claude"
-  echo '{"theme":"auto","permissions":{"allow":["Read"],"deny":["Bash(rm *)"]},"skillOverrides":{"mine":"name-only"}}' > "$s"
+  echo '{"theme":"auto","permissions":{"allow":["Read"],"deny":["Bash(rm *)"]},"skillOverrides":{"mine":"name-only"},"deniedMcpServers":[{"serverName":"mine"}]}' > "$s"
   assert_fails claude_lean_tools "$tpl" check-applied
   claude_lean_tools "$tpl" check-removed
   claude_lean_tools "$tpl" apply
@@ -463,6 +464,7 @@ assert d['theme'] == 'auto' and d['permissions']['allow'] == ['Read'], d
 assert d['enableArtifact'] is False, d
 assert d['permissions']['deny'] == ['Bash(rm *)'] + t['permissions']['deny'], d
 assert d['skillOverrides'] == {'mine': 'name-only', **t['skillOverrides']}, d
+assert d['deniedMcpServers'] == [{'serverName': 'mine'}] + t['deniedMcpServers'], d
 PY2
   local before; before=$(cat "$s"); claude_lean_tools "$tpl" apply
   assert_eq "$(cat "$s")" "$before" "apply is idempotent"
@@ -471,7 +473,7 @@ PY2
   python3 - "$s" <<'PY2'
 import json, sys
 d = json.load(open(sys.argv[1]))
-assert d == {'theme': 'auto', 'permissions': {'allow': ['Read'], 'deny': ['Bash(rm *)']}, 'skillOverrides': {'mine': 'name-only'}}, d
+assert d == {'theme': 'auto', 'permissions': {'allow': ['Read'], 'deny': ['Bash(rm *)']}, 'skillOverrides': {'mine': 'name-only'}, 'deniedMcpServers': [{'serverName': 'mine'}]}, d
 PY2
 }
 

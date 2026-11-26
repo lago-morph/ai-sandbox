@@ -37,5 +37,10 @@
     "anthropic-skills:chrome-browser": "off",
     "dataviz": "off",
     "anthropic-skills:computer-use": "off"
-  }
+  },
+  "deniedMcpServers": [
+    {
+      "serverName": "claude.ai Claude Docs"
+    }
+  ]
 }
