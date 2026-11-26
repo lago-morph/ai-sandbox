@@ -19,11 +19,9 @@ cd "$dir"
 rc-refresh --switch "$name" || warn "refresh of $name failed; starting anyway"
 
 export CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX=${AI_SANDBOX_NAME_PREFIX:-$(hostname -s)}
-if secret_has "$SECRET_CLAUDE_TOKEN"; then
-  # Untested: assumes Remote Control accepts a `claude setup-token` token.
-  CLAUDE_CODE_OAUTH_TOKEN=$(secret_get "$SECRET_CLAUDE_TOKEN")
-  export CLAUDE_CODE_OAUTH_TOKEN
-fi
+# Remote Control refuses to start with a long-lived (setup-token) token in the environment; it
+# needs the claude.ai login in ~/.claude/.credentials.json.
+unset CLAUDE_CODE_OAUTH_TOKEN
 
 args=(remote-control --name "$(rc_display_name "$name")" --spawn "$AI_SANDBOX_SPAWN_MODE")
 [ "$AI_SANDBOX_SPAWN_MODE" = worktree ] && args+=(--no-create-session-in-dir)

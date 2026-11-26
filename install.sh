@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Usage: ./install.sh [--no-setup]
 #
-# Guided install for the user running it. Asks for the host settings (hostname, session name
-# prefix, permission mode, and optionally the advanced ones), the GitHub token and how to log in
-# to Claude; writes the host config and stores the secrets; grants passwordless sudo (asks for
-# your password once); runs ./setup.sh; and offers to reboot if a change needs one (on WSL, prints how to restart the distro).
+# Guided install for the user running it, once the Claude CLI is installed and logged in (see
+# README.md). Asks for the host settings (hostname, session name prefix, permission mode, and
+# optionally the advanced ones) and the GitHub token; writes the host config and stores the
+# token; grants passwordless sudo (asks for your password once); runs ./setup.sh; and offers to reboot if a change needs one (on WSL, prints how to restart the distro).
 # Safe to re-run: current values are the defaults, and stored secrets are kept.
 #   --no-setup   only write the config and secrets: no sudo, no setup, no restart
 set -euo pipefail
@@ -25,6 +25,12 @@ esac
 [ "$(id -u)" != 0 ] || die "run this as the user the sandbox is for, not as root (setup uses sudo itself)"
 start_log install
 trap 'log "full log: $AI_SANDBOX_LOG_FILE"' EXIT
+
+# Remote Control needs a full claude.ai login, which only the user can do in a browser.
+claude_logged_in || die "install the Claude CLI and log in first, then re-run $0:
+    curl -fsSL https://claude.ai/install.sh | bash
+    ~/.local/bin/claude auth login"
+info "Claude CLI is installed and logged in"
 
 # ------------------------------------------------------------------ prompts (stdin, prompts on stderr)
 
@@ -202,33 +208,6 @@ if [ $have_github = 0 ]; then
     [ -n "$tok" ] || die "a GitHub token is required"
     printf '%s' "$tok" | store_github && break
   done
-  unset tok
-fi
-
-# ------------------------------------------------------------------ Claude login
-
-section "Claude login"
-if secret_has "$SECRET_CLAUDE_TOKEN"; then
-  info "using the setup-token stored in $(secret_describe "$SECRET_CLAUDE_TOKEN")"
-elif [ -x "$AI_SANDBOX_BIN/claude" ] && "$AI_SANDBOX_BIN/claude" auth status --json 2>/dev/null |
-    python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("loggedIn") else 1)' 2>/dev/null; then
-  info "Claude is already logged in"
-else
-  info "Remote Control needs a claude.ai login. The usual way is to log in through your browser"
-  info "during setup. A token from 'claude setup-token' also works for some uses, but it isn't"
-  info "confirmed that Remote Control accepts one."
-  tok=
-  if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && ask_yn "Store the token in \$CLAUDE_CODE_OAUTH_TOKEN?" n; then
-    tok=$CLAUDE_CODE_OAUTH_TOKEN
-  else
-    tok=$(ask_secret "Paste a setup-token or the path of a file holding one, or press Enter to log in through the browser during setup")
-  fi
-  if [ -n "$tok" ]; then
-    printf '%s' "$tok" | secret_set "$SECRET_CLAUDE_TOKEN"
-    info "stored it in $(secret_describe "$SECRET_CLAUDE_TOKEN")"
-  else
-    info "setup will start 'claude auth login'"
-  fi
   unset tok
 fi
 
