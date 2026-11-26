@@ -67,6 +67,7 @@ environment.
 |---|---|
 | `00-platform` | Supported distro, systemd as PID 1 with a user manager, sudo. Enables systemd on WSL if needed. |
 | `10-packages` | `git`, `curl`, CA certificates, `python3`, and `gh` (from GitHub's apt repo). |
+| `12-groups` | The user is in the `kvm` group (created if missing), for `/dev/kvm`. Takes effect after a restart. |
 | `15-hostname` | With `AI_SANDBOX_HOSTNAME`: on WSL, `[network] hostname` and `generateHosts = false` in `/etc/wsl.conf`; elsewhere, `hostnamectl` and cloud-init's `preserve_hostname`. Both: the `127.0.1.1` line in `/etc/hosts`. Originals kept as `*.bak-ai-sandbox`. |
 | `20-claude-cli` | Claude Code's native build in `~/.local/bin/claude`. |
 | `30-install` | This repo's `bin/` commands in `~/.local/bin`; `lib/`, `config/`, `templates/` in `~/.local/share/ai-sandbox`. |
