@@ -33,7 +33,7 @@ Read README.md for what setup does, the config keys, and the layout.
   your own session**: tell the user and get confirmation first.
 - Files setup manages (don't hand-edit; change the repo and re-run setup): `~/.local/bin/{rc-*,ai-sandbox-*}`,
   `~/.local/share/ai-sandbox/`, `~/.config/systemd/user/{rc@.service,rc-refresh.*}`, the
-  ai-sandbox block in `~/.claude/CLAUDE.md`, the `(ai-sandbox)` auto mode rules and the `Bash`
+  ai-sandbox block in `~/.claude/CLAUDE.md`, `remoteDialogSeen` in `~/.claude.json`, the `(ai-sandbox)` auto mode rules and the `Bash`
   allow rule in `~/.claude/settings.json`, and (with `AI_SANDBOX_HOSTNAME`) `/etc/wsl.conf`
   `[network]`, `/etc/hosts`'s `127.0.1.1` line.
 

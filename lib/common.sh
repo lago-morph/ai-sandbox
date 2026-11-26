@@ -128,14 +128,31 @@ claude_logged_in() {
     python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("loggedIn") else 1)' 2>/dev/null
 }
 
-# Exit 0 if the user has answered "Enable Remote Control?" with yes (remoteDialogSeen in
-# ~/.claude.json). Only the user may answer it; a server under systemd can't, and exits.
+# Remote Control asks "Enable Remote Control?" once per account, in a terminal; a server under
+# systemd can't answer and exits. The answer is remoteDialogSeen in ~/.claude.json. Setup sets it
+# on the user's behalf: running Remote Control is what this host is for.
+# claude_rc_consented: exit 0 if it's answered.
 claude_rc_consented() {
   python3 - <<'PY2'
 import json, os, sys
 p = os.path.expanduser('~/.claude.json')
 d = json.load(open(p)) if os.path.exists(p) else {}
 sys.exit(0 if d.get('remoteDialogSeen') is True else 1)
+PY2
+}
+
+# claude_rc_consent: answers it with yes, atomically.
+claude_rc_consent() {
+  python3 - <<'PY2'
+import json, os
+p = os.path.expanduser('~/.claude.json')
+d = json.load(open(p)) if os.path.exists(p) else {}
+d['remoteDialogSeen'] = True
+tmp = p + '.ai-sandbox.tmp'
+with open(tmp, 'w') as f:
+    json.dump(d, f, indent=2)
+os.chmod(tmp, 0o600)
+os.replace(tmp, p)
 PY2
 }
 
