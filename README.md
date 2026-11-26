@@ -182,8 +182,10 @@ permission mode, setup removes these entries. `claude auto-mode config` shows th
 Every Claude Code session loads full definitions for tools it rarely or never calls; in
 archived cloud sessions, the `claude-code-remote` MCP server alone was about 20K tokens and
 Artifact about 9K. `templates/claude/lean-tools.json` denies them by bare name, which the
-permissions docs say removes a tool from context. It's kept here so every cloud environment
-uses one list:
+permissions docs say removes a tool from context. It also turns off skills no session
+here uses (office documents, browsers, computer use, dataviz) with `skillOverrides: "off"` plus a
+`Skill(...)` deny rule each; a local test showed they leave the skill listing, without
+isolating which of the two does it. It's kept here so every cloud environment uses one list:
 
 - Paste `cloud/bootstrap.sh` as the setup script of each claude.ai/code environment you use.
   It downloads `cloud/setup.sh` from this repo's `main` and runs it; `setup.sh` merges
