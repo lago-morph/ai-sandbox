@@ -33,19 +33,23 @@ In a terminal on the machine, as the user the sandbox is for:
 mkdir -p ~/src && git clone https://github.com/lago-morph/ai-sandbox.git ~/src/ai-sandbox
 ```
 
-**2. Install the Claude CLI and log in.** Remote Control needs a full claude.ai login; it
-rejects tokens from `claude setup-token`. Over SSH, the login prints a URL to open in any
-browser and asks you to paste back the code.
+**2. Install the Claude CLI**
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
+```
+
+**3. Log in to Claude.** Remote Control needs a full claude.ai login; it rejects tokens from
+`claude setup-token`. Over SSH, the login prints a URL to open in any browser and asks you to
+paste back the code.
+```bash
 ~/.local/bin/claude auth login
 ```
 
-**3. Run the installer**
+**4. Run the installer**
 ```bash
 ~/src/ai-sandbox/install.sh
 ```
-It stops with these instructions if Claude isn't installed and logged in yet. Then it walks you
+It stops and points you back to steps 2 and 3 if Claude isn't installed and logged in yet. Then it walks you
 through:
 - **Passwordless sudo:** runs `sudo setup-root.sh` first, which asks for your password. This is
   the only time a password is needed. Then it installs the few packages it uses itself (`curl`,
@@ -66,14 +70,14 @@ It's safe to re-run: current values are the defaults and stored secrets are kept
 can also go through `./setup.sh` directly, which never prompts (except to log in to Claude, if
 the login has gone).
 
-**4. Connect.** Open [claude.ai/code](https://claude.ai/code) or the Claude app, pick the
+**5. Connect.** Open [claude.ai/code](https://claude.ai/code) or the Claude app, pick the
 `<hostname> ai-sandbox` environment, and start a session. To work on another repo, ask that
 session to serve it ("serve lago-morph/cloud-app"), then start sessions in its
 `<hostname> cloud-app` environment.
 
 ### Manual install
 
-The same steps without the prompts, after steps 1 and 2:
+The same steps without the prompts, after steps 1 to 3:
 ```bash
 sudo ~/src/ai-sandbox/setup-root.sh                   # passwordless sudo: /etc/sudoers.d/<you>
 printf '%s' "$TOKEN" | ~/src/ai-sandbox/bin/ai-sandbox-secret set github   # or: ai-sandbox-secret set github, and paste
