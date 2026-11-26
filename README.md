@@ -33,19 +33,22 @@ In a terminal on the machine, as the user the sandbox is for:
 mkdir -p ~/src && git clone https://github.com/lago-morph/ai-sandbox.git ~/src/ai-sandbox
 ```
 
-**2. Install the Claude CLI and log in.** Remote Control needs a full claude.ai login; it
-rejects tokens from `claude setup-token`. Over SSH, the login prints a URL to open in any
-browser and asks you to paste back the code.
+**2. Install the Claude CLI, log in, and enable Remote Control.** Remote Control needs a full
+claude.ai login; it rejects tokens from `claude setup-token`. Over SSH, the login prints a URL
+to open in any browser and asks you to paste back the code. Then start Remote Control once by
+hand: answer `y` to "Enable Remote Control?" and press Ctrl+C when it shows Ready. It only asks
+once, and the servers setup runs under systemd can't answer it.
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
 ~/.local/bin/claude auth login
+cd ~/src/ai-sandbox && ~/.local/bin/claude remote-control
 ```
 
 **3. Run the installer**
 ```bash
 ~/src/ai-sandbox/install.sh
 ```
-It stops with these instructions if Claude isn't installed and logged in yet. Then it walks you
+It stops with these instructions if Claude isn't installed, logged in and Remote Control enabled yet. Then it walks you
 through:
 - **Passwordless sudo:** runs `sudo setup-root.sh` first, which asks for your password. This is
   the only time a password is needed. Then it installs the few packages it uses itself (`curl`,
@@ -98,9 +101,9 @@ setup tells you when that's still needed.
 | `30-install` | This repo's `bin/` commands in `~/.local/bin`; `lib/`, `config/`, `templates/` in `~/.local/share/ai-sandbox`. |
 | `40-secrets` | Secrets storage is private (700/600) and the GitHub token is present. |
 | `50-github` | `git` gets the token from `ai-sandbox-git-credential` for github.com; `gh` is logged in with it; if git has no commit identity, it uses the token's GitHub account and noreply email. |
-| `60-claude-auth` | Claude is logged in to claude.ai; if not, it runs `claude auth login` (in a terminal). |
+| `60-claude-auth` | Claude is logged in to claude.ai (if not, it runs `claude auth login` in a terminal), and you've answered yes to Remote Control's one-time "Enable Remote Control?". |
 | `70-claude-config` | A managed block of host conventions in `~/.claude/CLAUDE.md`; this repo trusted. With `bypassPermissions`: the dangerous-mode warning pre-accepted, and the ai-sandbox auto mode rules plus a `Bash` allow rule in `~/.claude/settings.json` (see [Permission modes](#permission-modes)). |
-| `80-systemd` | Lingering, the `rc@` unit template, `rc-refresh.timer`, and `rc@ai-sandbox` enabled at boot and running. |
+| `80-systemd` | Lingering, the `rc@` unit template, `rc-refresh.timer`, and `rc@ai-sandbox` enabled at boot and running (it must stay up for a few seconds; otherwise setup shows its last output). |
 
 ### Day to day
 

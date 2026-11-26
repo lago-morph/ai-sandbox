@@ -128,6 +128,17 @@ claude_logged_in() {
     python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("loggedIn") else 1)' 2>/dev/null
 }
 
+# Exit 0 if the user has answered "Enable Remote Control?" with yes (remoteDialogSeen in
+# ~/.claude.json). Only the user may answer it; a server under systemd can't, and exits.
+claude_rc_consented() {
+  python3 - <<'PY2'
+import json, os, sys
+p = os.path.expanduser('~/.claude.json')
+d = json.load(open(p)) if os.path.exists(p) else {}
+sys.exit(0 if d.get('remoteDialogSeen') is True else 1)
+PY2
+}
+
 # Marks a directory trusted in ~/.claude.json (the workspace trust dialog), atomically.
 claude_trust_dir() {
   python3 - "$1" <<'PY'
