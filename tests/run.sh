@@ -125,30 +125,23 @@ test_secret_set() {
 
 # A fake GitHub API (file://) that knows one account; tokens aren't checked by it.
 fake_github() { mkdir -p "$T/api"; echo '{"login":"octo"}' > "$T/api/user"; export AI_SANDBOX_GITHUB_API="file://$T/api"; }
-# A fake Claude CLI whose `auth status` reports logged in (true) or not (false), and the
-# Remote Control consent in ~/.claude.json (true, or false for none).
+# A fake Claude CLI whose `auth status` reports logged in (true) or not (false).
 fake_claude() {
   mkdir -p "$HOME/.local/bin"
   printf '#!/bin/sh\n[ "$1 $2" = "auth status" ] && echo %s\n' "'{\"loggedIn\": ${1:-true}}'" > "$HOME/.local/bin/claude"
   chmod +x "$HOME/.local/bin/claude"
-  if [ "${2:-true}" = true ]; then echo '{"remoteDialogSeen": true}' > "$HOME/.claude.json"; else rm -f "$HOME/.claude.json"; fi
 }
 
-test_install_requires_rc_consent() {
-  fake_github; fake_claude true false
-  local out
-  out=$(printf 'box1\n\n\n\ny\ntok-1\n' | "$REPO/install.sh" --no-setup 2>&1) && { echo "should fail"; return 1; }
-  assert_contains "$out" "claude remote-control"
-  assert_contains "$out" "Enable Remote Control?"
-  [ ! -e "$XDG_CONFIG_HOME/ai-sandbox/config" ]
-  # The setup step checks the same thing.
+test_rc_consent() {
+  # setup answers "Enable Remote Control?" (70-claude-config), keeping the rest of ~/.claude.json.
   # shellcheck source=../lib/common.sh
   source "$AI_SANDBOX_LIB/common.sh"
-  # shellcheck source=../lib/steps/60-claude-auth.sh
-  out=$( (source "$REPO/lib/steps/60-claude-auth.sh"; check) 2>&1) && { echo "check should fail"; return 1; }
-  assert_contains "$out" "Remote Control hasn't been enabled yet"
-  fake_claude true true
-  (source "$REPO/lib/steps/60-claude-auth.sh"; check)
+  echo '{"projects": {"/x": {"hasTrustDialogAccepted": true}}}' > "$HOME/.claude.json"
+  assert_fails claude_rc_consented
+  claude_rc_consent
+  claude_rc_consented
+  claude_dir_trusted /x
+  assert_eq "$(stat -c %a "$HOME/.claude.json")" 600
 }
 
 test_install_requires_claude_login() {
