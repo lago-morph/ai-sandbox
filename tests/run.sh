@@ -41,9 +41,9 @@ assert_fails()    { if "$@" >/dev/null 2>&1; then echo "expected failure: $*"; r
 
 test_lint() {
   bash -n "$REPO/setup.sh"; bash -n "$REPO/setup-root.sh"; bash -n "$REPO/install.sh"
-  for f in "$REPO"/bin/* "$REPO"/lib/*.sh "$REPO"/lib/*/*.sh "$REPO"/tests/*.sh; do bash -n "$f"; done
+  for f in "$REPO"/bin/* "$REPO"/lib/*.sh "$REPO"/lib/*/*.sh "$REPO"/tests/*.sh "$REPO"/cloud/*.sh; do bash -n "$f"; done
   if command -v shellcheck >/dev/null; then
-    (cd "$REPO" && shellcheck -x -S warning setup.sh setup-root.sh install.sh bin/* lib/*.sh lib/*/*.sh tests/*.sh)
+    (cd "$REPO" && shellcheck -x -S warning setup.sh setup-root.sh install.sh bin/* lib/*.sh lib/*/*.sh tests/*.sh cloud/*.sh)
   else
     echo "(shellcheck not installed; syntax only)"
   fi
@@ -408,6 +408,41 @@ test_setup_install_step() {
 test_setup_requires_config() {
   local out; out=$("$REPO/setup.sh" --check 2>&1) && { echo "should fail without config"; return 1; }
   assert_contains "$out" "ai-sandbox-init-config"
+}
+
+test_cloud_setup_merges_lean_tools() {
+  # cloud/setup.sh adds the lean deny rules to existing settings, keeps the rest, and is idempotent.
+  mkdir -p "$HOME/.claude"
+  echo '{"model": "opus", "permissions": {"deny": ["Artifact", "Bash(rm *)"], "allow": ["Read"]}}' > "$HOME/.claude/settings.json"
+  export AI_SANDBOX_LEAN_TOOLS=$REPO/templates/claude/lean-tools.json AI_SANDBOX_CLOUD_HOMES=$HOME
+  "$REPO/cloud/setup.sh" >/dev/null
+  "$REPO/cloud/setup.sh" >/dev/null
+  python3 - "$HOME/.claude/settings.json" "$AI_SANDBOX_LEAN_TOOLS" <<'PY2'
+import json, sys
+d, lean = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+deny = d['permissions']['deny']
+assert d['model'] == 'opus' and d['permissions']['allow'] == ['Read'], d
+assert d['enableArtifact'] is False, d
+assert 'Bash(rm *)' in deny and 'mcp__claude-code-remote__*' in deny, deny
+assert len(deny) == len(set(deny)), deny
+assert set(lean['permissions']['deny']) <= set(deny), deny
+PY2
+}
+
+test_cloud_setup_new_home() {
+  # A home without ~/.claude gets a settings file with just the lean settings.
+  AI_SANDBOX_LEAN_TOOLS=$REPO/templates/claude/lean-tools.json AI_SANDBOX_CLOUD_HOMES=$HOME "$REPO/cloud/setup.sh" >/dev/null
+  python3 -c 'import json,sys; a=json.load(open(sys.argv[1])); b=json.load(open(sys.argv[2])); assert a==b, (a,b)' \
+    "$HOME/.claude/settings.json" "$REPO/templates/claude/lean-tools.json"
+}
+
+test_cloud_bootstrap_never_fails() {
+  # A failing setup script stops the cloud session from starting, so bootstrap must exit 0
+  # even when the download fails.
+  local d; d=$(mktemp -d)
+  printf '#!/bin/sh\nexit 22\n' > "$d/curl"; chmod +x "$d/curl"
+  local out; out=$(PATH="$d:$PATH" bash "$REPO/cloud/bootstrap.sh" 2>&1)
+  assert_contains "$out" "download failed; continuing"
 }
 
 # ------------------------------------------------------------------ main

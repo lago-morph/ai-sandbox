@@ -176,6 +176,29 @@ bypass but not identical. Setup also adds a `Bash` entry to `permissions.allow`,
 Bash prompts in Manual and Accept edits mode (auto mode ignores such broad rules). With any other
 permission mode, setup removes these entries. `claude auto-mode config` shows the effective rules.
 
+## Cloud sessions: fewer unused tools
+
+Every Claude Code session loads full definitions for tools it rarely or never calls; in
+archived cloud sessions, the `claude-code-remote` MCP server alone was about 20K tokens and
+Artifact about 9K. `templates/claude/lean-tools.json` denies them by bare name, which the
+permissions docs say removes a tool from context. It's kept here so every cloud environment
+uses one list:
+
+- Paste `cloud/bootstrap.sh` as the setup script of each claude.ai/code environment you use.
+  It downloads `cloud/setup.sh` from this repo's `main` and runs it; `setup.sh` merges
+  `lean-tools.json` into `~/.claude/settings.json` for root and each user under `/home`,
+  keeping existing settings. Both never stop the session from starting.
+- The environment must reach `raw.githubusercontent.com`.
+- To change the list, edit `lean-tools.json` and merge. New containers pick it up; resumed
+  sessions keep what they started with.
+- For a session that needs a denied tool, use an environment without the setup script.
+- Whatever is on `main` runs as root in every new cloud container, so keep these files free
+  of secrets and review changes to them.
+
+> **Untested.** Not yet run in a real cloud environment: whether Claude Code honours this
+> `~/.claude/settings.json`, which user it runs as, and whether the server-level and glob deny
+> rules remove MCP tools from context.
+
 ## Security notes
 
 - Remote Control only makes outbound HTTPS connections; no inbound ports are needed. On EC2,
@@ -216,7 +239,8 @@ lib/common.sh             config, secrets interface, helpers
 lib/steps/                setup steps
 lib/platform/             distro support
 lib/secrets/              secrets backends
-templates/                systemd units and the ~/.claude/CLAUDE.md block
+templates/                systemd units, the ~/.claude/CLAUDE.md block, lean-tools.json
+cloud/                    setup script for claude.ai/code environments (bootstrap.sh, setup.sh)
 config/                   example host config
 tests/run.sh              regression tests
 .claude/skills/           skills for sessions in this repo
