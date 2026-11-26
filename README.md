@@ -189,10 +189,14 @@ isolating which of the two does it. Skills from a plugin ignore both, so `enable
 claude.ai-synced `cowork-plugin-management@synced` plugin instead. `deniedMcpServers` blocks the claude.ai Claude Docs
 connector, whose tools are denied anyway but whose server instructions would still load. It's kept here so every cloud environment uses one list:
 
-- Paste `cloud/bootstrap.sh` as the setup script of each claude.ai/code environment you use.
-  It downloads `cloud/setup.sh` from this repo's `main` and runs it; `setup.sh` merges
-  `lean-tools.json` into `~/.claude/settings.json` for root and each user under `/home`,
-  keeping existing settings. Both never stop the session from starting.
+- Set each claude.ai/code environment's setup script to this one line:
+  ```bash
+  curl -fsSL --max-time 30 -o /tmp/ai-sandbox-cloud.sh https://raw.githubusercontent.com/lago-morph/ai-sandbox/main/cloud/setup.sh && bash /tmp/ai-sandbox-cloud.sh || true
+  ```
+  `cloud/setup.sh` downloads `lean-tools.json` from `main` and merges it into
+  `~/.claude/settings.json` for root and each user under `/home`, keeping existing settings.
+  It limits itself to 120 seconds and always exits 0; the trailing `|| true` covers a failed
+  download, so a broken or unreachable script never stops a session from starting.
 - The environment must reach `raw.githubusercontent.com`.
 - To change the list, edit `lean-tools.json` and merge. New containers pick it up; resumed
   sessions keep what they started with.
@@ -255,7 +259,7 @@ lib/steps/                setup steps
 lib/platform/             distro support
 lib/secrets/              secrets backends
 templates/                systemd units, the ~/.claude/CLAUDE.md block, lean-tools.json
-cloud/                    setup script for claude.ai/code environments (bootstrap.sh, setup.sh)
+cloud/setup.sh            setup script for claude.ai/code environments
 config/                   example host config
 tests/run.sh              regression tests
 .claude/skills/           skills for sessions in this repo

@@ -438,13 +438,18 @@ test_cloud_setup_new_home() {
     "$HOME/.claude/settings.json" "$REPO/templates/claude/lean-tools.json"
 }
 
-test_cloud_bootstrap_never_fails() {
-  # A failing setup script stops the cloud session from starting, so bootstrap must exit 0
-  # even when the download fails.
+test_cloud_setup_never_fails() {
+  # A failing setup script stops the cloud session from starting, so cloud/setup.sh exits 0
+  # when the download fails and when its run takes longer than AI_SANDBOX_CLOUD_TIMEOUT.
   local d; d=$(mktemp -d)
   printf '#!/bin/sh\nexit 22\n' > "$d/curl"; chmod +x "$d/curl"
-  local out; out=$(PATH="$d:$PATH" bash "$REPO/cloud/bootstrap.sh" 2>&1)
-  assert_contains "$out" "download failed; continuing"
+  local out; out=$(PATH="$d:$PATH" AI_SANDBOX_CLOUD_HOMES=$HOME bash "$REPO/cloud/setup.sh" 2>&1)
+  assert_contains "$out" "failed (22); continuing"
+  printf '#!/bin/sh\nsleep 10\n' > "$d/curl"
+  local t0=$SECONDS
+  out=$(PATH="$d:$PATH" AI_SANDBOX_CLOUD_HOMES=$HOME AI_SANDBOX_CLOUD_TIMEOUT=1 bash "$REPO/cloud/setup.sh" 2>&1)
+  assert_contains "$out" "timed out after 1s; continuing"
+  [ $((SECONDS - t0)) -lt 5 ] || { echo "timeout did not stop the run"; return 1; }
 }
 
 test_claude_lean_tools() {
