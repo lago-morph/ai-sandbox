@@ -71,6 +71,7 @@ rc_display_name() {
 # Backends live in lib/secrets/<backend>.sh and implement:
 #   secrets_backend_has NAME       exit 0 if the secret is set and non-empty
 #   secrets_backend_get NAME       print the value (no trailing newline); exit 1 if missing
+#   secrets_backend_set NAME       store the value read from stdin (replacing any old one)
 #   secrets_backend_describe NAME  print where the secret is expected (for messages; never the value)
 #   secrets_backend_check          exit 0 if storage is safe (e.g. permissions); print problems
 #   secrets_backend_fix            repair what secrets_backend_check reports, where possible
@@ -82,6 +83,11 @@ secrets_init() {
 secret_has()      { secrets_backend_has "$1"; }
 secret_get()      { secrets_backend_get "$1"; }
 secret_describe() { secrets_backend_describe "$1"; }
+# secret_set NAME: stores stdin as the secret. Pass the value on stdin, never as an argument.
+secret_set() {
+  [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "not a valid secret name: $1"
+  secrets_backend_set "$1"
+}
 
 # ---------------------------------------------------------------- platform
 # Distro support lives in lib/platform/<os-release ID>.sh. See lib/platform/README.md.

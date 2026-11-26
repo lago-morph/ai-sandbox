@@ -13,5 +13,5 @@ apply() {
   secrets_init
   secrets_backend_fix || true
   secret_has "$SECRET_GITHUB" ||
-    die "put a GitHub fine-grained PAT in $(secret_describe "$SECRET_GITHUB") and re-run setup"
+    die "store a GitHub fine-grained PAT (ai-sandbox-secret set $SECRET_GITHUB, or ./install.sh) in $(secret_describe "$SECRET_GITHUB") and re-run setup"
 }

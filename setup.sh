@@ -24,7 +24,7 @@ done
 
 # shellcheck source=lib/common.sh
 source "$AI_SANDBOX_LIB/common.sh"
-config_load || die "no host config at $AI_SANDBOX_CONFIG. Create one with: $AI_SANDBOX_REPO_DIR/bin/ai-sandbox-init-config"
+config_load || die "no host config at $AI_SANDBOX_CONFIG. Run $AI_SANDBOX_REPO_DIR/install.sh (guided), or create one with $AI_SANDBOX_REPO_DIR/bin/ai-sandbox-init-config"
 
 # The main checkout of this repo (setup may be run from a worktree of it).
 common_dir=$(git -C "$AI_SANDBOX_REPO_DIR" rev-parse --path-format=absolute --git-common-dir)
