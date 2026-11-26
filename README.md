@@ -183,7 +183,7 @@ Every Claude Code session loads full definitions for tools it rarely or never ca
 archived cloud sessions, the `claude-code-remote` MCP server alone was about 20K tokens and
 Artifact about 9K. `templates/claude/lean-tools.json` denies them by bare name, which the
 permissions docs say removes a tool from context. It also turns off skills no session
-here uses (office documents, browsers, computer use, dataviz) with `skillOverrides: "off"` plus a
+here uses (office documents, browsers, computer use, dataviz, claude-api) with `skillOverrides: "off"` plus a
 `Skill(...)` deny rule each; a local test showed they leave the skill listing, without
 isolating which of the two does it. `deniedMcpServers` blocks the claude.ai Claude Docs
 connector, whose tools are denied anyway but whose server instructions would still load. It's kept here so every cloud environment uses one list:
