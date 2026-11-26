@@ -191,12 +191,12 @@ connector, whose tools are denied anyway but whose server instructions would sti
 
 - Set each claude.ai/code environment's setup script to this one line:
   ```bash
-  curl -fsSL --max-time 30 -o /tmp/ai-sandbox-cloud.sh https://raw.githubusercontent.com/lago-morph/ai-sandbox/main/cloud/setup.sh && bash /tmp/ai-sandbox-cloud.sh || true
+  curl -fsSL --max-time 30 https://raw.githubusercontent.com/lago-morph/ai-sandbox/main/cloud/setup.sh | bash
   ```
   `cloud/setup.sh` downloads `lean-tools.json` from `main` and merges it into
   `~/.claude/settings.json` for root and each user under `/home`, keeping existing settings.
-  It limits itself to 120 seconds and always exits 0; the trailing `|| true` covers a failed
-  download, so a broken or unreachable script never stops a session from starting.
+  It stops its work after 120 seconds and always exits 0, and a failed download gives bash
+  empty input (exit 0), so it never stops a session from starting.
 - The environment must reach `raw.githubusercontent.com`.
 - To change the list, edit `lean-tools.json` and merge. New containers pick it up; resumed
   sessions keep what they started with.

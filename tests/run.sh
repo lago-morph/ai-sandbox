@@ -415,8 +415,8 @@ test_cloud_setup_merges_lean_tools() {
   mkdir -p "$HOME/.claude"
   echo '{"model": "opus", "permissions": {"deny": ["Artifact", "Bash(rm *)"], "allow": ["Read"]}, "skillOverrides": {"mine": "name-only"}, "deniedMcpServers": [{"serverName": "mine"}]}' > "$HOME/.claude/settings.json"
   export AI_SANDBOX_LEAN_TOOLS=$REPO/templates/claude/lean-tools.json AI_SANDBOX_CLOUD_HOMES=$HOME
-  "$REPO/cloud/setup.sh" >/dev/null
-  "$REPO/cloud/setup.sh" >/dev/null
+  bash < "$REPO/cloud/setup.sh" >/dev/null
+  bash < "$REPO/cloud/setup.sh" >/dev/null
   python3 - "$HOME/.claude/settings.json" "$AI_SANDBOX_LEAN_TOOLS" <<'PY2'
 import json, sys
 d, lean = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
@@ -443,13 +443,19 @@ test_cloud_setup_never_fails() {
   # when the download fails and when its run takes longer than AI_SANDBOX_CLOUD_TIMEOUT.
   local d; d=$(mktemp -d)
   printf '#!/bin/sh\nexit 22\n' > "$d/curl"; chmod +x "$d/curl"
-  local out; out=$(PATH="$d:$PATH" AI_SANDBOX_CLOUD_HOMES=$HOME bash "$REPO/cloud/setup.sh" 2>&1)
+  # Run the way an environment does: piped into bash.
+  local out; out=$(PATH="$d:$PATH" AI_SANDBOX_CLOUD_HOMES=$HOME bash < "$REPO/cloud/setup.sh" 2>&1)
   assert_contains "$out" "failed (22); continuing"
   printf '#!/bin/sh\nsleep 10\n' > "$d/curl"
   local t0=$SECONDS
-  out=$(PATH="$d:$PATH" AI_SANDBOX_CLOUD_HOMES=$HOME AI_SANDBOX_CLOUD_TIMEOUT=1 bash "$REPO/cloud/setup.sh" 2>&1)
+  out=$(PATH="$d:$PATH" AI_SANDBOX_CLOUD_HOMES=$HOME AI_SANDBOX_CLOUD_TIMEOUT=1 bash < "$REPO/cloud/setup.sh" 2>&1)
   assert_contains "$out" "timed out after 1s; continuing"
   [ $((SECONDS - t0)) -lt 5 ] || { echo "timeout did not stop the run"; return 1; }
+  # After a successful run, the watchdog's sleep is gone too.
+  AI_SANDBOX_LEAN_TOOLS=$REPO/templates/claude/lean-tools.json AI_SANDBOX_CLOUD_HOMES=$HOME \
+    AI_SANDBOX_CLOUD_TIMEOUT=7171 bash < "$REPO/cloud/setup.sh" >/dev/null
+  sleep 0.5
+  if pgrep -f '^sleep 7171$' >/dev/null; then pkill -f '^sleep 7171$'; echo "watchdog sleep left running"; return 1; fi
 }
 
 test_claude_lean_tools() {
