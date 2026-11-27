@@ -174,9 +174,10 @@ bypass:
   block rules (72 in CLI 2.1.332; see [docs/auto-mode-defaults.md](docs/auto-mode-defaults.md)).
   Without this, the built-ins blocked things like dispatching a CI workflow that uses cloud
   credentials, even with the allow rules below. A few soft blocks are kept, listed by label in the
-  template as `"$builtin:<Label>"`: Blind Apply, Credential Materialization, Credential
-  Exploration, Tmux Self Drive, Session Transcript Tampering and Real-World Transactions. Cloud
-  Storage Mass Delete is deliberately not kept: scripted infrastructure teardown would trip it.
+  template as `"$builtin:<Label>"`: Credential Materialization, Credential Exploration, Tmux
+  Self Drive, Session Transcript Tampering and Real-World Transactions. Deliberately not kept:
+  Cloud Storage Mass Delete (scripted infrastructure teardown trips it) and Blind Apply (it
+  blocked running GitHub Actions workflows).
   Setup copies each kept rule's current wording from `claude auto-mode defaults`, so they follow
   CLI updates; if a label disappears from the CLI, `--check` reports the step pending and apply
   fails. Your own block entries stay; on removal, setup puts `"$defaults"` back in front of them.
