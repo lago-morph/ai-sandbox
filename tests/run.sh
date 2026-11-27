@@ -350,9 +350,9 @@ a = d['autoMode']['allow']
 assert a[0] == '$defaults' and a[1] == 'Mine: keep' and any('User Pre-Approval (ai-sandbox)' in e for e in a), a
 assert d['autoMode']['environment'][0] == '$defaults'
 sd, hd = d['autoMode']['soft_deny'], d['autoMode']['hard_deny']
-assert '$defaults' not in sd and sd[0] == 'Mine: block' and len(sd) == 8, sd
+assert '$defaults' not in sd and sd[0] == 'Mine: block' and len(sd) == 7, sd
 assert all(e.startswith(l) and 'built-in text for' in e and e.endswith('(ai-sandbox): built-in rule kept by ai-sandbox.')
-           for e, l in zip(sd[1:], ['Cloud Storage Mass Delete', 'Blind Apply'])), sd
+           for e, l in zip(sd[1:], ['Blind Apply', 'Credential Materialization'])), sd
 assert not any('Git Destructive' in e or '$builtin' in e for e in sd), sd
 assert len(hd) == 1 and 'Nothing Blocked (ai-sandbox)' in hd[0], hd
 PY

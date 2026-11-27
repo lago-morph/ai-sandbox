@@ -9,7 +9,6 @@
   },
   "autoMode_replace": {
     "soft_deny": [
-      "$builtin:Cloud Storage Mass Delete",
       "$builtin:Blind Apply",
       "$builtin:Credential Materialization",
       "$builtin:Credential Exploration",
