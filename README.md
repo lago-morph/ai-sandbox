@@ -170,15 +170,21 @@ and that wins. The app's mode picker doesn't offer bypass for Remote Control ses
 So with `bypassPermissions`, setup also writes rules for auto mode's classifier into
 `~/.claude/settings.json`, from `templates/claude/auto-mode.json`, to make auto mode behave like
 bypass:
-- `autoMode.soft_deny` and `autoMode.hard_deny` are **replaced** (no `"$defaults"`) by a single
-  placeholder entry, which removes all of auto mode's built-in block rules (72 soft and 1 hard, in
-  CLI 2.1.332). Without this, the built-ins blocked things like dispatching a CI workflow that
-  uses cloud credentials, even with the allow rules below. The placeholder is needed because
-  Claude Code treats an empty list as unset and falls back to the built-ins. Your own block entries
-  stay; on removal, setup puts `"$defaults"` back in front of them.
+- `autoMode.soft_deny` and `autoMode.hard_deny` are **replaced** (no `"$defaults"`), which drops
+  auto mode's built-in block rules (72 soft and 1 hard, in CLI 2.1.332; see
+  [docs/auto-mode-defaults.md](docs/auto-mode-defaults.md)). Without this, the built-ins blocked
+  things like dispatching a CI workflow that uses cloud credentials, even with the allow rules
+  below. A few soft blocks are kept, listed by label in the template as `"$builtin:<Label>"`:
+  Cloud Storage Mass Delete, Blind Apply, Credential Materialization, Credential Exploration, Tmux
+  Self Drive, Session Transcript Tampering and Real-World Transactions. Setup copies each one's
+  current wording from `claude auto-mode defaults`, so they follow CLI updates; if a label
+  disappears from the CLI, `--check` reports the step pending and apply fails. `hard_deny` gets a
+  placeholder entry, because Claude Code treats an empty list as unset and falls back to the
+  built-ins. The built-in `allow` exceptions stay. Your own block entries stay; on removal, setup
+  puts `"$defaults"` back in front of them.
 - An `autoMode.environment` entry saying this is the user's sandbox and that the credentials on it
   were placed deliberately, so whatever they reach is trusted, and an `autoMode.allow` entry
-  pre-approving every action with any tool. Both keep `"$defaults"` first.
+  pre-approving every action with any tool except the kept blocks. Both keep `"$defaults"` first.
 
 Each entry is tagged `(ai-sandbox)`; setup leaves your own entries alone. Auto mode still runs its
 classifier, and the docs say the server may apply built-in rules that no local setting shows, so

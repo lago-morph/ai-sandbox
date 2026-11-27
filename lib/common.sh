@@ -241,9 +241,35 @@ for key, ours in tpl['autoMode'].items():
     if lst: am[key] = lst
     else: am.pop(key, None)
 # autoMode_replace lists go in without "$defaults", replacing the built-in rules (an empty list
-# counts as unset, hence the placeholder entries). The user's own entries stay. On remove, a list
+# counts as unset, hence the placeholder entry for a list that would otherwise be empty). The user's own entries stay. On remove, a list
 # with entries of the user's left gets "$defaults" back so the built-ins return.
+# An entry "$builtin:<Label>" stands for that built-in rule, copied from `claude auto-mode defaults`
+# (or the JSON file in AI_SANDBOX_AUTO_MODE_DEFAULTS) with the tag appended, so it tracks the CLI.
+_defaults = None
+def builtin(key, label):
+    global _defaults
+    if _defaults is None:
+        src = os.environ.get('AI_SANDBOX_AUTO_MODE_DEFAULTS')
+        try:
+            if src:
+                _defaults = json.load(open(src))
+            else:
+                import subprocess
+                out = subprocess.run(['claude', 'auto-mode', 'defaults'], capture_output=True,
+                                     text=True, check=True, cwd='/').stdout
+                _defaults = json.loads(out)
+        except Exception as e:
+            if action.startswith('check'): sys.exit(1)
+            sys.exit(f'claude_auto_mode: cannot read the built-in auto mode rules: {e}')
+    m = [r for r in _defaults.get(key, []) if r.startswith(label + ' [') or r.startswith(label + ':')]
+    if len(m) != 1:
+        if action.startswith('check'): sys.exit(1)
+        sys.exit(f'claude_auto_mode: no single built-in {key} rule labelled {label!r}')
+    return m[0].rstrip() + f'\n{tag}: built-in rule kept by ai-sandbox.'
+
 for key, ours in tpl.get('autoMode_replace', {}).items():
+    if install:
+        ours = [builtin(key, e[len('$builtin:'):]) if e.startswith('$builtin:') else e for e in ours]
     lst = [e for e in am.get(key, []) if tag not in e]
     mine = [e for e in lst if e != '$defaults']
     if install:
