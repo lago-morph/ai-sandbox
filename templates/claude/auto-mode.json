@@ -15,9 +15,6 @@
       "$builtin:Tmux Self Drive",
       "$builtin:Session Transcript Tampering",
       "$builtin:Real-World Transactions"
-    ],
-    "hard_deny": [
-      "Nothing Blocked (ai-sandbox): The user has deliberately removed the built-in hard block rules on this machine; this placeholder replaces the built-in list and blocks nothing."
     ]
   },
   "permissions_allow": ["Bash"]

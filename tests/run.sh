@@ -336,9 +336,9 @@ labels = [e[9:] for e in tpl['autoMode_replace']['soft_deny'] if e.startswith('$
 rules = [f'{l} [named+specifics]: built-in text for {l}.' for l in labels] + ['Git Destructive: not kept.']
 json.dump({'soft_deny': rules, 'hard_deny': ['Data Exfiltration: x'], 'allow': [], 'environment': []}, open(sys.argv[2], 'w'))
 PY
-  echo '{"theme":"auto","permissions":{"allow":["Read"]},"autoMode":{"allow":["Mine: keep"],"soft_deny":["$defaults","Mine: block"]}}' > "$s"
+  echo '{"theme":"auto","permissions":{"allow":["Read"]},"autoMode":{"allow":["Mine: keep"],"soft_deny":["$defaults","Mine: block"],"hard_deny":["Old placeholder (ai-sandbox): stale"]}}' > "$s"
   assert_fails claude_auto_mode "$tpl" check-applied
-  claude_auto_mode "$tpl" check-removed
+  assert_fails claude_auto_mode "$tpl" check-removed   # the stale tagged entry needs removing too
   claude_auto_mode "$tpl" apply
   claude_auto_mode "$tpl" check-applied
   python3 - "$s" <<'PY'
@@ -349,12 +349,12 @@ assert d['permissions']['allow'] == ['Read', 'Bash'], d
 a = d['autoMode']['allow']
 assert a[0] == '$defaults' and a[1] == 'Mine: keep' and any('User Pre-Approval (ai-sandbox)' in e for e in a), a
 assert d['autoMode']['environment'][0] == '$defaults'
-sd, hd = d['autoMode']['soft_deny'], d['autoMode']['hard_deny']
+sd = d['autoMode']['soft_deny']
 assert '$defaults' not in sd and sd[0] == 'Mine: block' and len(sd) == 7, sd
 assert all(e.startswith(l) and 'built-in text for' in e and e.endswith('(ai-sandbox): built-in rule kept by ai-sandbox.')
            for e, l in zip(sd[1:], ['Blind Apply', 'Credential Materialization'])), sd
 assert not any('Git Destructive' in e or '$builtin' in e for e in sd), sd
-assert len(hd) == 1 and 'Nothing Blocked (ai-sandbox)' in hd[0], hd
+assert 'hard_deny' not in d['autoMode'], d   # stale placeholder gone: built-in hard block applies
 PY
   local before; before=$(cat "$s"); claude_auto_mode "$tpl" apply
   assert_eq "$(cat "$s")" "$before" "apply is idempotent"
