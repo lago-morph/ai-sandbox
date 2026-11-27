@@ -278,6 +278,14 @@ for key, ours in tpl.get('autoMode_replace', {}).items():
         lst = ['$defaults'] + mine if mine else []
     if lst: am[key] = lst
     else: am.pop(key, None)
+# Lists the template no longer manages: drop our tagged entries (e.g. an old placeholder), and put
+# "$defaults" back in front of what's left so the built-in rules return.
+managed = set(tpl['autoMode']) | set(tpl.get('autoMode_replace', {}))
+for key in [k for k in am if k not in managed and isinstance(am[k], list)]:
+    if not any(tag in e for e in am[key]): continue
+    mine = [e for e in am[key] if tag not in e and e != '$defaults']
+    if mine: am[key] = ['$defaults'] + mine
+    else: am.pop(key)
 if am: d['autoMode'] = am
 else: d.pop('autoMode', None)
 

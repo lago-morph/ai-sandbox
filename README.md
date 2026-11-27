@@ -170,19 +170,18 @@ and that wins. The app's mode picker doesn't offer bypass for Remote Control ses
 So with `bypassPermissions`, setup also writes rules for auto mode's classifier into
 `~/.claude/settings.json`, from `templates/claude/auto-mode.json`, to make auto mode behave like
 bypass:
-- `autoMode.soft_deny` and `autoMode.hard_deny` are **replaced** (no `"$defaults"`), which drops
-  auto mode's built-in block rules (72 soft and 1 hard, in CLI 2.1.332; see
-  [docs/auto-mode-defaults.md](docs/auto-mode-defaults.md)). Without this, the built-ins blocked
-  things like dispatching a CI workflow that uses cloud credentials, even with the allow rules
-  below. A few soft blocks are kept, listed by label in the template as `"$builtin:<Label>"`:
-  Blind Apply, Credential Materialization, Credential Exploration, Tmux Self Drive, Session
-  Transcript Tampering and Real-World Transactions. Cloud Storage Mass Delete is deliberately not
-  kept: scripted infrastructure teardown would trip it. Setup copies each one's
-  current wording from `claude auto-mode defaults`, so they follow CLI updates; if a label
-  disappears from the CLI, `--check` reports the step pending and apply fails. `hard_deny` gets a
-  placeholder entry, because Claude Code treats an empty list as unset and falls back to the
-  built-ins. The built-in `allow` exceptions stay. Your own block entries stay; on removal, setup
-  puts `"$defaults"` back in front of them.
+- `autoMode.soft_deny` is **replaced** (no `"$defaults"`), which drops auto mode's built-in soft
+  block rules (72 in CLI 2.1.332; see [docs/auto-mode-defaults.md](docs/auto-mode-defaults.md)).
+  Without this, the built-ins blocked things like dispatching a CI workflow that uses cloud
+  credentials, even with the allow rules below. A few soft blocks are kept, listed by label in the
+  template as `"$builtin:<Label>"`: Blind Apply, Credential Materialization, Credential
+  Exploration, Tmux Self Drive, Session Transcript Tampering and Real-World Transactions. Cloud
+  Storage Mass Delete is deliberately not kept: scripted infrastructure teardown would trip it.
+  Setup copies each kept rule's current wording from `claude auto-mode defaults`, so they follow
+  CLI updates; if a label disappears from the CLI, `--check` reports the step pending and apply
+  fails. Your own block entries stay; on removal, setup puts `"$defaults"` back in front of them.
+- `autoMode.hard_deny` is left alone, so the built-in hard block (Data Exfiltration) stays on.
+  Allow rules can't override it. The built-in `allow` exceptions stay too.
 - An `autoMode.environment` entry saying this is the user's sandbox and that the credentials on it
   were placed deliberately, so whatever they reach is trusted, and an `autoMode.allow` entry
   pre-approving every action with any tool except the kept blocks. Both keep `"$defaults"` first.
