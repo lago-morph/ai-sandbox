@@ -184,7 +184,7 @@ Each entry is tagged `(ai-sandbox)`; setup leaves your own entries alone. Auto m
 classifier, and the docs say the server may apply built-in rules that no local setting shows, so
 this is as close to bypass as settings allow but not guaranteed identical. Setup also adds a `Bash`
 entry to `permissions.allow`, which removes Bash prompts in Manual and Accept edits mode (auto mode
-ignores such broad rules). With any other permission mode, setup removes these entries. `claude auto-mode config` shows the effective rules.
+ignores such broad rules). With any other permission mode, setup removes these entries. `claude auto-mode config` shows the effective rules; `claude auto-mode defaults` prints the built-in ones, and [docs/auto-mode-defaults.md](docs/auto-mode-defaults.md) is a readable copy from CLI 2.1.332.
 
 ## Cloud sessions: fewer unused tools
 
