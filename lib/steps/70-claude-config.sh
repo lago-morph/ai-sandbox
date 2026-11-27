@@ -5,7 +5,8 @@
 # since a Remote Control server running under systemd can't answer it. With bypassPermissions,
 # also the ai-sandbox auto mode rules in ~/.claude/settings.json (templates/claude/auto-mode.json):
 # the Claude app puts sessions it creates in auto mode regardless of --permission-mode, so these
-# rules tell auto mode's classifier that the user pre-approved everything. Otherwise they're removed.
+# rules replace auto mode's block rules with nothing and tell its classifier the user pre-approved
+# everything. Otherwise they're removed.
 # With AI_SANDBOX_LEAN_TOOLS=on (default), the deny rules in templates/claude/lean-tools.json, so
 # tools sessions don't use aren't loaded into their context; with off, they're removed.
 

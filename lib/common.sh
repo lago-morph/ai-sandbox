@@ -217,7 +217,8 @@ PY
 # claude_auto_mode TEMPLATE apply|remove|check-applied|check-removed
 # Manages the ai-sandbox rules in ~/.claude/settings.json: the autoMode environment/allow
 # entries (each tagged "(ai-sandbox)") and the permissions.allow entries from TEMPLATE (JSON).
-# Keeps "$defaults" first in each autoMode list so the built-in rules stay. Other keys and the
+# Keeps "$defaults" first in each autoMode list so the built-in rules stay, except for the lists
+# in autoMode_replace (soft_deny/hard_deny), which replace the built-ins. Other keys and the
 # user's own entries are left alone. check-* exits 1 if apply/remove would change the file.
 claude_auto_mode() {
   python3 - "$@" <<'PY'
@@ -237,6 +238,18 @@ for key, ours in tpl['autoMode'].items():
         lst = ['$defaults'] + [e for e in lst if e != '$defaults'] + ours
     elif lst == ['$defaults']:
         lst = []
+    if lst: am[key] = lst
+    else: am.pop(key, None)
+# autoMode_replace lists go in without "$defaults", replacing the built-in rules (an empty list
+# counts as unset, hence the placeholder entries). The user's own entries stay. On remove, a list
+# with entries of the user's left gets "$defaults" back so the built-ins return.
+for key, ours in tpl.get('autoMode_replace', {}).items():
+    lst = [e for e in am.get(key, []) if tag not in e]
+    mine = [e for e in lst if e != '$defaults']
+    if install:
+        lst = mine + ours
+    else:
+        lst = ['$defaults'] + mine if mine else []
     if lst: am[key] = lst
     else: am.pop(key, None)
 if am: d['autoMode'] = am

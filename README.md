@@ -168,14 +168,23 @@ and that wins. The app's mode picker doesn't offer bypass for Remote Control ses
 [anthropics/claude-code#87829](https://github.com/anthropics/claude-code/issues/87829).
 
 So with `bypassPermissions`, setup also writes rules for auto mode's classifier into
-`~/.claude/settings.json`, from `templates/claude/auto-mode.json`: an `autoMode.environment`
-entry saying this is the user's sandbox, and `autoMode.allow` entries saying the user has
-pre-approved every Bash command (sudo included), host administration and Claude config edits.
-Each is tagged `(ai-sandbox)`; setup keeps `"$defaults"` first in each list and leaves your own
-entries alone. Auto mode still runs its classifier and its hard-block rules, so this is close to
-bypass but not identical. Setup also adds a `Bash` entry to `permissions.allow`, which removes
-Bash prompts in Manual and Accept edits mode (auto mode ignores such broad rules). With any other
-permission mode, setup removes these entries. `claude auto-mode config` shows the effective rules.
+`~/.claude/settings.json`, from `templates/claude/auto-mode.json`, to make auto mode behave like
+bypass:
+- `autoMode.soft_deny` and `autoMode.hard_deny` are **replaced** (no `"$defaults"`) by a single
+  placeholder entry, which removes all of auto mode's built-in block rules (72 soft and 1 hard, in
+  CLI 2.1.332). Without this, the built-ins blocked things like dispatching a CI workflow that
+  uses cloud credentials, even with the allow rules below. The placeholder is needed because
+  Claude Code treats an empty list as unset and falls back to the built-ins. Your own block entries
+  stay; on removal, setup puts `"$defaults"` back in front of them.
+- An `autoMode.environment` entry saying this is the user's sandbox and that the credentials on it
+  were placed deliberately, so whatever they reach is trusted, and an `autoMode.allow` entry
+  pre-approving every action with any tool. Both keep `"$defaults"` first.
+
+Each entry is tagged `(ai-sandbox)`; setup leaves your own entries alone. Auto mode still runs its
+classifier, and the docs say the server may apply built-in rules that no local setting shows, so
+this is as close to bypass as settings allow but not guaranteed identical. Setup also adds a `Bash`
+entry to `permissions.allow`, which removes Bash prompts in Manual and Accept edits mode (auto mode
+ignores such broad rules). With any other permission mode, setup removes these entries. `claude auto-mode config` shows the effective rules.
 
 ## Cloud sessions: fewer unused tools
 
@@ -224,9 +233,13 @@ denied. ScheduleWakeup (only used by `/loop`) was added to the list after that t
   the security group can deny all inbound traffic (use SSM or a temporary SSH rule for setup).
 - `setup-root.sh` gives the sandbox user passwordless sudo, so sessions effectively run as root
   whenever they choose to.
-- `bypassPermissions` (and the auto mode pre-approval rules it installs) lets sessions run any
-  command as your user without asking, and this user usually has sudo. That's the point of a personal sandbox, but use a machine and a GitHub token
-  you're comfortable handing to an agent. A fine-grained token limited to specific repos is best.
+- `bypassPermissions` (and the auto mode rules it installs, which remove auto mode's block rules)
+  lets sessions run any command as your user without asking, and this user usually has sudo. They
+  will also use any credential on the machine (GitHub token, cloud keys) for whatever the task
+  seems to need, including pushes, merges, CI runs and cloud changes. That's the point of a
+  personal sandbox: what an agent can reach is limited by the credentials you put here, so use a
+  machine and tokens you're comfortable handing to an agent. A fine-grained token limited to
+  specific repos is best.
 - Secrets never go into the repo or the config. Anything running as your user can read them,
   including sessions; the sandbox is only as isolated as the user account.
 - Claude Code itself keeps its login in `~/.claude/.credentials.json`.
