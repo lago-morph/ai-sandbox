@@ -327,6 +327,15 @@ test_claude_auto_mode() {
   source "$AI_SANDBOX_LIB/common.sh"
   local tpl="$REPO/templates/claude/auto-mode.json" s="$HOME/.claude/settings.json"
   mkdir -p "$HOME/.claude"
+  # Fake `claude auto-mode defaults`: one built-in rule per "$builtin:" label, plus one not kept.
+  export AI_SANDBOX_AUTO_MODE_DEFAULTS="$T/auto-mode-defaults.json"
+  python3 - "$tpl" "$AI_SANDBOX_AUTO_MODE_DEFAULTS" <<'PY'
+import json, sys
+tpl = json.load(open(sys.argv[1]))
+labels = [e[9:] for e in tpl['autoMode_replace']['soft_deny'] if e.startswith('$builtin:')]
+rules = [f'{l} [named+specifics]: built-in text for {l}.' for l in labels] + ['Git Destructive: not kept.']
+json.dump({'soft_deny': rules, 'hard_deny': ['Data Exfiltration: x'], 'allow': [], 'environment': []}, open(sys.argv[2], 'w'))
+PY
   echo '{"theme":"auto","permissions":{"allow":["Read"]},"autoMode":{"allow":["Mine: keep"],"soft_deny":["$defaults","Mine: block"]}}' > "$s"
   assert_fails claude_auto_mode "$tpl" check-applied
   claude_auto_mode "$tpl" check-removed
@@ -341,7 +350,10 @@ a = d['autoMode']['allow']
 assert a[0] == '$defaults' and a[1] == 'Mine: keep' and any('User Pre-Approval (ai-sandbox)' in e for e in a), a
 assert d['autoMode']['environment'][0] == '$defaults'
 sd, hd = d['autoMode']['soft_deny'], d['autoMode']['hard_deny']
-assert '$defaults' not in sd and sd[0] == 'Mine: block' and 'Nothing Blocked (ai-sandbox)' in sd[1] and len(sd) == 2, sd
+assert '$defaults' not in sd and sd[0] == 'Mine: block' and len(sd) == 8, sd
+assert all(e.startswith(l) and 'built-in text for' in e and e.endswith('(ai-sandbox): built-in rule kept by ai-sandbox.')
+           for e, l in zip(sd[1:], ['Cloud Storage Mass Delete', 'Blind Apply'])), sd
+assert not any('Git Destructive' in e or '$builtin' in e for e in sd), sd
 assert len(hd) == 1 and 'Nothing Blocked (ai-sandbox)' in hd[0], hd
 PY
   local before; before=$(cat "$s"); claude_auto_mode "$tpl" apply
@@ -353,6 +365,13 @@ import json, sys
 d = json.load(open(sys.argv[1]))
 assert d == {'theme': 'auto', 'permissions': {'allow': ['Read']}, 'autoMode': {'allow': ['$defaults', 'Mine: keep'], 'soft_deny': ['$defaults', 'Mine: block']}}, d
 PY
+  # A kept label missing from the CLI's built-ins: check reports work, apply fails, file untouched.
+  echo '{"soft_deny": ["Blind Apply: only this one"]}' > "$AI_SANDBOX_AUTO_MODE_DEFAULTS"
+  before=$(cat "$s")
+  assert_fails claude_auto_mode "$tpl" check-applied
+  assert_fails claude_auto_mode "$tpl" apply 2>/dev/null
+  assert_eq "$(cat "$s")" "$before" "failed apply leaves settings alone"
+  unset AI_SANDBOX_AUTO_MODE_DEFAULTS
 }
 
 test_setup_root_sudoers() {
