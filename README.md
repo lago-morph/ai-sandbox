@@ -175,8 +175,9 @@ bypass:
   [docs/auto-mode-defaults.md](docs/auto-mode-defaults.md)). Without this, the built-ins blocked
   things like dispatching a CI workflow that uses cloud credentials, even with the allow rules
   below. A few soft blocks are kept, listed by label in the template as `"$builtin:<Label>"`:
-  Cloud Storage Mass Delete, Blind Apply, Credential Materialization, Credential Exploration, Tmux
-  Self Drive, Session Transcript Tampering and Real-World Transactions. Setup copies each one's
+  Blind Apply, Credential Materialization, Credential Exploration, Tmux Self Drive, Session
+  Transcript Tampering and Real-World Transactions. Cloud Storage Mass Delete is deliberately not
+  kept: scripted infrastructure teardown would trip it. Setup copies each one's
   current wording from `claude auto-mode defaults`, so they follow CLI updates; if a label
   disappears from the CLI, `--check` reports the step pending and apply fails. `hard_deny` gets a
   placeholder entry, because Claude Code treats an empty list as unset and falls back to the
