@@ -350,9 +350,9 @@ a = d['autoMode']['allow']
 assert a[0] == '$defaults' and a[1] == 'Mine: keep' and any('User Pre-Approval (ai-sandbox)' in e for e in a), a
 assert d['autoMode']['environment'][0] == '$defaults'
 sd = d['autoMode']['soft_deny']
-assert '$defaults' not in sd and sd[0] == 'Mine: block' and len(sd) == 7, sd
+assert '$defaults' not in sd and sd[0] == 'Mine: block' and len(sd) == 6, sd
 assert all(e.startswith(l) and 'built-in text for' in e and e.endswith('(ai-sandbox): built-in rule kept by ai-sandbox.')
-           for e, l in zip(sd[1:], ['Blind Apply', 'Credential Materialization'])), sd
+           for e, l in zip(sd[1:], ['Credential Materialization', 'Credential Exploration'])), sd
 assert not any('Git Destructive' in e or '$builtin' in e for e in sd), sd
 assert 'hard_deny' not in d['autoMode'], d   # stale placeholder gone: built-in hard block applies
 PY
@@ -366,7 +366,7 @@ d = json.load(open(sys.argv[1]))
 assert d == {'theme': 'auto', 'permissions': {'allow': ['Read']}, 'autoMode': {'allow': ['$defaults', 'Mine: keep'], 'soft_deny': ['$defaults', 'Mine: block']}}, d
 PY
   # A kept label missing from the CLI's built-ins: check reports work, apply fails, file untouched.
-  echo '{"soft_deny": ["Blind Apply: only this one"]}' > "$AI_SANDBOX_AUTO_MODE_DEFAULTS"
+  echo '{"soft_deny": ["Credential Exploration: only this one"]}' > "$AI_SANDBOX_AUTO_MODE_DEFAULTS"
   before=$(cat "$s")
   assert_fails claude_auto_mode "$tpl" check-applied
   assert_fails claude_auto_mode "$tpl" apply 2>/dev/null

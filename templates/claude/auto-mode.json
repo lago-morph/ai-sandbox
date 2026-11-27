@@ -9,7 +9,6 @@
   },
   "autoMode_replace": {
     "soft_deny": [
-      "$builtin:Blind Apply",
       "$builtin:Credential Materialization",
       "$builtin:Credential Exploration",
       "$builtin:Tmux Self Drive",
