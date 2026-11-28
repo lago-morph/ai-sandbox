@@ -31,9 +31,9 @@ current one and confirming. It validates the result before writing it.
    ai-sandbox repo's own server ends this session. Ask first.
 
 ## Cautions
-- `AI_SANDBOX_MODULES` turns modules on (docs/modules.md). Removing a name never uninstalls
+- `AI_SANDBOX_MODULES` turns modules on (modules/README.md). Removing a name never uninstalls
   anything. After adding one, setup stops until its tools are installed by following
-  `docs/<module>.md#installing`; tell the user that's the next step.
+  `modules/<module>/README.md#installing`; tell the user that's the next step.
 - `AI_SANDBOX_SPAWN_MODE=same-dir` and a non-default `AI_SANDBOX_SECRETS_DIR` are untested on a
   real host. Say so when the user picks one.
 - Changing `AI_SANDBOX_GIT_BASEDIR` doesn't move existing checkouts, and this repo must be

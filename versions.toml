@@ -1,6 +1,6 @@
-# Modules and the versions of every tool ai-sandbox installs or relies on. See docs/modules.md.
+# Modules and the versions of every tool ai-sandbox installs or relies on. See modules/README.md.
 #
-# [modules.<name>]  description (required), requires = [other modules], doc (default docs/<name>.md)
+# [modules.<name>]  description (required), requires = [other modules]; its doc is modules/<name>/README.md
 # [tools.<name>]    module ("base" = the base setup), version, source, and per source:
 #   github:<owner>/<repo>  asset, platforms, sha256.<platform>   pinned "==X"
 #   url:<template>         sha256.<platform>                     pinned "==X"

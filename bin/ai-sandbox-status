@@ -34,8 +34,7 @@ for m in $(modules_installed); do
     *) summary+=("$m: UNHEALTHY: $first$note"); [ $worst -ge 1 ] || worst=1 ;;
   esac
   if [ $rc != 0 ]; then
-    doc="docs/$m.md#troubleshooting"
-    details+=("--- $m (see $doc in the ai-sandbox repo)" "$out")
+    details+=("--- $m (see Troubleshooting in $AI_SANDBOX_SHARE/modules/$m/README.md)" "$out")
   fi
 done
 
