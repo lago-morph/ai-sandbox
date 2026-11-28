@@ -1,0 +1,15 @@
+[Unit]
+Description=Shared Dolt SQL server for beads (ai-sandbox; modules/beads/README.md)
+After=network-online.target
+
+[Service]
+ExecStart=@BIN@/ai-sandbox-beads-server run
+Restart=on-failure
+RestartSec=5
+# 3 = stopped on purpose (halt marker): don't restart.
+RestartPreventExitStatus=3
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+[Install]
+WantedBy=default.target

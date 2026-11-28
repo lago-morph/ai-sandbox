@@ -1,0 +1,6 @@
+[Unit]
+Description=Stop the beads Dolt server because the sync failed (ai-sandbox)
+
+[Service]
+Type=oneshot
+ExecStart=@BIN@/ai-sandbox-beads-server halt sync-failed "the sync itself failed; see: journalctl --user -u beads-dolt-sync"

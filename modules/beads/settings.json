@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(bd init:*)",
+      "Bash(bd bootstrap:*)",
+      "Bash(bd dolt start:*)",
+      "Bash(bd dolt stop:*)",
+      "Bash(bd dolt killall:*)",
+      "Bash(bd dolt push:*)",
+      "Bash(bd dolt pull:*)",
+      "Bash(bd doctor --fix:*)",
+      "Bash(dolt sql-server:*)"
+    ]
+  }
+}

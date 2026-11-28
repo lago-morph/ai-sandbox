@@ -117,7 +117,7 @@ setup tells you when that's still needed.
 | Server logs | `journalctl --user -u rc@<repo>` |
 | Check the host matches this repo (changes nothing) | `./setup.sh --check` |
 | Logs of the last install / setup run | `~/.local/state/ai-sandbox/install.log`, `setup.log` |
-| Run the tests | `tests/run.sh` (add `--host` to include `./setup.sh --check`) |
+| Run the tests | `tests/run.sh` (add `--host` to include `./setup.sh --check`; `BEADS_TEST_DOLT=<dolt>` adds the beads end-to-end test) |
 | Something on the host isn't working | `ai-sandbox-status` (modules' health, stops on purpose first) |
 | Tool versions: wanted vs installed | `ai-sandbox-versions` |
 
@@ -240,10 +240,12 @@ denied. ScheduleWakeup (only used by `/loop`) was added to the list after that t
 
 ## Modules
 
-> **Untested.** The framework is covered by the unit tests, but no module exists yet and none
-> has run on a real host.
+> **Untested.** The framework and the beads module are covered by the unit tests (the beads sync
+> also end to end against a real `dolt` with local remotes, when `BEADS_TEST_DOLT` points at one),
+> but beads hasn't run on a real host or against DoltHub yet: its pilot hasn't passed.
 
-A module owns one set of shared software (the first planned one is beads: [modules/beads/README.md](modules/beads/README.md)).
+A module owns one set of shared software. The first is **beads**: a shared Dolt server for `bd`,
+synced with DoltHub ([modules/beads/README.md](modules/beads/README.md)).
 The design is in [modules/README.md](modules/README.md). In short:
 
 - [`versions.toml`](versions.toml) lists every module and the version of every tool ai-sandbox

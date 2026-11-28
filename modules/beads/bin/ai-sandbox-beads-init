@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Usage: ai-sandbox-beads-init DB PREFIX
+# Creates beads database DB (issue prefix PREFIX) on the shared server and connects it to the
+# DoltHub database <account>/DB, which must already exist (onboarding step 5 in
+# modules/beads/README.md). Runs `bd init` from a scratch directory, never in a clone, gives the
+# database `dolthub` as its only remote, and pushes. The only command that runs `bd init`.
+set -euo pipefail
+here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+if [ -z "${AI_SANDBOX_LIB:-}" ]; then
+  if [ -f "$here/../../../setup.sh" ]; then AI_SANDBOX_LIB=$(cd "$here/../../../lib" && pwd); else AI_SANDBOX_LIB=$HOME/.local/share/ai-sandbox/lib; fi
+fi
+# shellcheck source=../../../lib/common.sh
+source "$AI_SANDBOX_LIB/common.sh"
+if [ -f "$here/../lib/beads.sh" ]; then BEADS_LIB=$here/../lib; else BEADS_LIB=$AI_SANDBOX_SHARE/modules/beads/lib; fi
+# shellcheck source=../lib/beads.sh
+source "$BEADS_LIB/beads.sh"
+
+db=${1:-}; prefix=${2:-}
+[ -n "$db" ] && [ -n "$prefix" ] || die "usage: ai-sandbox-beads-init DB PREFIX"
+[[ "$db" =~ ^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$ ]] ||
+  die "database name '$db': lowercase letters, digits, '-' and '_', not starting or ending with '-' or '_'"
+case "$db" in
+  testdb_*|beads_test*|beads_pt*|beads_vr*|benchdb_*|doctest_*|doctortest_*)
+    die "database name '$db' looks like a bd test database (bd may drop those); rename it" ;;
+esac
+[[ "$prefix" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || die "not an issue prefix: '$prefix'"
+beads_halted && die "beads is stopped on purpose: $(beads_marker_summary)"
+beads_reachable || die "the beads server isn't running (ai-sandbox-beads-status)"
+beads_databases | grep -qxF "$db" && die "database $db already exists on the server"
+config_require; secrets_init
+account=$(cred_get DOLTHUB_ACCOUNT dolthub-account) ||
+  die "no DoltHub account: set DOLTHUB_ACCOUNT or store it with ai-sandbox-secret set dolthub-account"
+
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+echo "bd init in a scratch directory ($scratch) against $BEADS_HOST:$BEADS_PORT, database $db"
+(cd "$scratch" && BEADS_DOLT_AUTO_START=0 "$AI_SANDBOX_BIN/bd" init --server --external \
+  --server-host "$BEADS_HOST" --server-port "$BEADS_PORT" --database "$db" --prefix "$prefix" \
+  --skip-agents --skip-hooks --non-interactive)
+beads_databases | grep -qxF "$db" || die "bd init didn't create database $db on the server"
+
+for r in $(beads_sql "$db" "SELECT name FROM dolt_remotes" | tail -n +2); do
+  [ "$r" = dolthub ] || { echo "removing remote $r"; beads_sql "$db" "CALL DOLT_REMOTE('remove', '$r')" >/dev/null; }
+done
+url="https://doltremoteapi.dolthub.com/$account/$db"
+beads_sql "$db" "SELECT name FROM dolt_remotes" | grep -qx dolthub ||
+  beads_sql "$db" "CALL DOLT_REMOTE('add', 'dolthub', '$url')" >/dev/null
+beads_sql "$db" "CALL DOLT_COMMIT('-A', '--skip-empty', '-m', 'beads init')" >/dev/null
+echo "pushing to $url"
+beads_sql "$db" "CALL DOLT_PUSH('--set-upstream', 'dolthub', 'main')" >/dev/null
+echo "done: database $db on the server, remote dolthub = $account/$db"
+echo "next: onboarding step 6 (match the project id) in $BEADS_README"

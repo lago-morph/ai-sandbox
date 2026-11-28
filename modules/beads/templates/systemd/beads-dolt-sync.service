@@ -1,0 +1,12 @@
+[Unit]
+Description=Sync the beads Dolt databases with DoltHub (ai-sandbox)
+# The sync crashing (any exit but 0 and 3) halts the server: a sync that silently stops is the
+# failure the module exists to avoid.
+OnFailure=beads-dolt-halt.service
+
+[Service]
+Type=oneshot
+ExecStart=@BIN@/ai-sandbox-beads-sync
+# 3 = halted (now or already): handled, not a crash.
+SuccessExitStatus=3
+TimeoutStartSec=10min
