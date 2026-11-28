@@ -37,7 +37,7 @@ else
   esac
 fi
 ls=$(last_success)
-echo "last successful sync: ${ls:+$(date -d "@$ls" '+%F %T')}${ls:-never}"
+if [ -n "$ls" ]; then echo "last successful sync: $(date -d "@$ls" '+%F %T')"; else echo "last successful sync: never"; fi
 [ "$(failures)" = 0 ] || echo "failed runs in a row: $(failures)"
 if [ -f "$BEADS_LOG" ]; then echo "recent log:"; tail -n 5 "$BEADS_LOG" | sed 's/^/  /'; fi
 if [ $rc = 1 ] && ! beads_halted; then

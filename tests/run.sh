@@ -757,6 +757,9 @@ test_beads_commands_respect_halt() {
   local out rc
   rc=0; out=$("$BEADS_MOD/bin/ai-sandbox-beads-status") || rc=$?
   assert_eq "$rc" 2
+  assert_contains "$out" "last successful sync: never"
+  printf '{"last_success": 1795842590}' > "$AI_SANDBOX_STATE/beads-sync.state"
+  assert_contains "$("$BEADS_MOD/bin/ai-sandbox-beads-status")" "last successful sync: $(date -d @1795842590 '+%F %T')"$'\n'
   assert_eq "$(head -n1 <<<"$out")" "STOPPED ON PURPOSE by beads sync at 2026-11-27 14:02:00: ai-sandbox: diverged from DoltHub (ahead 1, behind 2) (class=hard)"
   rc=0; out=$("$BEADS_MOD/bin/ai-sandbox-beads-server" start 2>&1) || rc=$?
   assert_eq "$rc" 3
