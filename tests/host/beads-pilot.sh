@@ -81,7 +81,8 @@ bdq create "pilot local-only" -t task >/dev/null
 ai-sandbox-beads-sync >/dev/null
 check "diverged: halt marker written" grep -q "diverged from DoltHub" "$MARKER"
 check "diverged: server stopped" bash -c "! systemctl --user is-active -q beads-dolt"
-check "status says STOPPED ON PURPOSE (exit 2)" bash -c "ai-sandbox-beads-status | head -n1 | grep -q 'STOPPED ON PURPOSE'; [ \${PIPESTATUS[0]} = 2 ]"
+status_halted() { local out rc=0; out=$(ai-sandbox-beads-status) || rc=$?; [ "$rc" = 2 ] && has "$(head -n1 <<<"$out")" "STOPPED ON PURPOSE"; }
+check "status says STOPPED ON PURPOSE (exit 2)" status_halted
 check "bd fails while halted" bash -c "! (cd '$T/repo' && timeout 60 bd list)"
 check "bd started no dolt server of its own" bash -c "! pgrep -x dolt && [ ! -e '$T/repo/.beads/dolt' ]"
 check "ai-sandbox-beads-server start refuses (exit 3)" bash -c "ai-sandbox-beads-server start; [ \$? = 3 ]"
