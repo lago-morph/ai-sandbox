@@ -18,13 +18,8 @@ How it's used: the laptop host is the primary environment. Cloud sandboxes and o
 are used only while the laptop is unavailable (off, asleep, offline or broken), never at the
 same time as it. So writes come from one place at a time, and the histories should never
 diverge. When they do, sync stops the server instead of merging (see
-[Stopping on purpose](#stopping-on-purpose)).
-
-The realistic way they diverge is a handover: the laptop goes away with commits it hasn't pushed
-yet (up to a minute's worth), work continues in a cloud sandbox from DoltHub's older copy, and
-the laptop comes back. Its first sync then finds both sides have new commits and halts, which is
-what should happen: the owner decides how to combine them. A write on the laptop after it wakes
-but before its first pull (at most a minute) has the same effect.
+[Stopping on purpose](#stopping-on-purpose)). There's no extra logic for handing over between
+places; the likely causes of a stop are listed under [Troubleshooting](#likely-causes).
 
 ## What the module installs
 
@@ -168,6 +163,29 @@ recent log:
 
 or `running` / `stopped (not by sync)` / `failed (not by sync)`, with the last successful sync,
 the current run of failures if any, the last log lines, and the unit's last output.
+
+### Likely causes
+
+Check these first; they follow from how the owner works (laptop first, cloud sandboxes or other
+machines only while the laptop is unavailable).
+
+- **Diverged after a handover.** The laptop went away (off, asleep, offline) with commits it
+  hadn't pushed yet (up to a minute's worth). Work continued in a cloud sandbox from DoltHub's
+  older copy. When the laptop came back, its first sync found new commits on both sides.
+  Look for: a HALT with `class=hard` diverged, shortly after the laptop came back; the local-only
+  commits are from just before it went away.
+- **Diverged on wake.** After work elsewhere, a session on the laptop wrote to beads in the minute
+  between waking and the laptop's first pull. Look for: the local-only commits are from just
+  after the laptop came back, and DoltHub's from the cloud session.
+- **Diverged the other way.** A cloud sandbox started while the laptop still had unpushed work,
+  or the laptop came back while a cloud sandbox was still writing. Look for: the halt is in the
+  cloud sandbox, or commits on both sides overlap in time.
+- **Offline too long.** The laptop has had no network (or DoltHub was down) for 15 minutes while
+  running. Look for: a HALT after a run of `class=soft` network errors in the log.
+- **Credential key removed or expired** on DoltHub. Look for: `class=hard` authentication.
+- **A database created outside onboarding** (for example by a plain `bd init`), with no
+  `dolthub` remote. Look for: `no dolthub remote` errors for one database, then a HALT after 15
+  minutes.
 
 ### Resolving a halt
 
