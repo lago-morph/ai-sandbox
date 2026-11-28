@@ -7,14 +7,19 @@ source "$AI_SANDBOX_MODULE_DIR/lib/beads.sh"
 BD_CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}/bd/config.yaml
 
 # _bd_config check|apply: the user-level bd config (which bd also writes itself) sets
-# dolt.auto-start: false (bd never starts a Dolt server of its own), metrics.disabled: true (no
+# dolt.auto-start: false (bd never starts a Dolt server of its own), dolt.host/port (the shared
+# server's address), metrics.disabled: true (no
 # usage telemetry; a repo's config can't turn it back on) and metrics.endpoint pointing nowhere.
 # Other keys are left as they are.
 _bd_config() {
   python3 - "$BD_CONFIG" "$1" <<'PY'
 import os, re, sys
 path, action = sys.argv[1], sys.argv[2]
-want = [('dolt', 'auto-start', 'false'), ('metrics', 'disabled', 'true'),
+want = [('dolt', 'auto-start', 'false'),
+        # bd refuses the server address from a repo's .beads/.env (a repo mustn't redirect it),
+        # so the shared server's address lives here.
+        ('dolt', 'host', '127.0.1.1'), ('dolt', 'port', '3307'),
+        ('metrics', 'disabled', 'true'),
         # Belt and braces: if the switch were ever ignored, metrics go to a local port nothing
         # listens on (bd uses its built-in endpoint only when this is empty).
         ('metrics', 'endpoint', 'http://127.0.0.1:9/ai-sandbox-metrics-disabled')]
@@ -42,7 +47,8 @@ for sec, key, val in want:
             break
     else:
         indent = next((re.match(r'\s+', lines[i]).group(0) for i in range(start + 1, end) if lines[i].strip()), '  ')
-        lines.insert(start + 1, f'{indent}{key}: {val}'); changed = True
+        at = max((i for i in range(start + 1, end) if lines[i].strip()), default=start) + 1
+        lines.insert(at, f'{indent}{key}: {val}'); changed = True
 if action == 'check':
     sys.exit(1 if changed else 0)
 if changed:
