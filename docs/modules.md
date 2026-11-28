@@ -49,6 +49,31 @@ Module commands and units are files setup manages (add them to the list in CLAUD
 A module can add lines to the managed ai-sandbox block in `~/.claude/CLAUDE.md` (for example, how
 to troubleshoot its services). They appear only while the module is listed.
 
+## Troubleshooting entry points
+
+The usual way something gets diagnosed: the owner opens a session against this repo and says
+"figure out what went wrong". That session has to land on the right command and document without
+being told which module failed. So every module provides:
+
+- **`docs/<name>.md`** with a `## Troubleshooting` section: what the module stops or refuses on
+  purpose, its likely causes, and how to resolve each. (This design doc becomes that document.)
+- **A `status` function** (and an `ai-sandbox-<name>-status` command) whose first line says
+  whether the module is healthy and, if something was stopped on purpose, that it was and why.
+
+Three pointers lead there:
+
+1. **`ai-sandbox-status`** (new, part of the framework): runs every listed module's `status`
+   and prints a one-line summary per module, healthy ones included, then the detail for any that
+   aren't, each with a pointer to `docs/<name>.md#troubleshooting`. One command to run first.
+2. **This repo's CLAUDE.md** gets a "Troubleshooting the host" entry: *When asked what went
+   wrong on this host, run `ai-sandbox-status` first, before reading service logs or changing
+   anything; then follow the module's `docs/<name>.md` Troubleshooting section. Services can be
+   stopped on purpose, and those stops are the first thing to rule out.*
+3. **The managed block in `~/.claude/CLAUDE.md`** (every session on the host, any repo) carries
+   each listed module's short rule, ending with the absolute path of its document in the main
+   checkout (`<git base dir>/ai-sandbox/docs/<name>.md`), since sessions in other repos can't
+   see this repo's relative paths.
+
 ## Pinning
 
 `modules/<name>/versions.sh` sets exact versions and, for downloads, a sha256 per platform:

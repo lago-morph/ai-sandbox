@@ -143,13 +143,19 @@ The log gets one line per database per minute. The sync trims it to its last 7 d
 
 ## Troubleshooting
 
+How a session gets here (see [modules.md](modules.md#troubleshooting-entry-points)): a session on
+this repo asked "what went wrong" runs `ai-sandbox-status` first (this repo's CLAUDE.md says so),
+which includes the beads status and points at this section. A session on another repo whose `bd`
+fails follows the host-wide rule below.
+
 **Rule for every session on the host** (added to the managed block in `~/.claude/CLAUDE.md`,
 because a beads failure can happen in a session on any repo):
 
 > If `bd` can't reach its server (connection refused on 127.0.0.1:3307), run
 > `ai-sandbox-beads-status` **before checking anything else**. The server is stopped on purpose
 > when a DoltHub sync fails, and that command says whether that happened and why. Don't restart
-> the server or edit beads data to work around it; report the reason to the owner.
+> the server or edit beads data to work around it; report the reason to the owner. Causes and
+> fixes: `<git base dir>/ai-sandbox/docs/beads.md`, section Troubleshooting.
 
 `ai-sandbox-beads-status` answers the question in its first line, then gives detail:
 
