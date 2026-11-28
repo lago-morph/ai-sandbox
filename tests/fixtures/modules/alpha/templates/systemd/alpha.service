@@ -1,0 +1,5 @@
+[Unit]
+Description=Alpha fixture
+
+[Service]
+ExecStart=@BIN@/ai-sandbox-alpha-status

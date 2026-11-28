@@ -121,13 +121,16 @@ modules/<name>/
   claude.md              lines for the managed block in ~/.claude/CLAUDE.md
   settings.json          entries merged into ~/.claude/settings.json (e.g. deny rules), optional
   bin/                   commands installed into ~/.local/bin as ai-sandbox-<name>-*
+  steps/NN-*.sh          the module's own setup steps (same check/apply contract as lib/steps/)
   skills/<skill>/        Claude skills installed for every session on the host, optional
   templates/             units, config files
 docs/<name>.md           the module's doc: what it is, and the agent's instructions
 ```
 
 Configuration and code are kept apart: `versions.toml`, `claude.md` and `settings.json` are data,
-never run. Everything executable is under `bin/`.
+never run. Everything executable is under `bin/` and `steps/`. Steps do only what is safe to
+repeat without an agent (install a config file, enable a unit, set up a credential); installing
+or upgrading tools, and anything touching data, stays in the module doc.
 
 Setup copies these from **whichever checkout runs it** (as the base setup does), into
 `~/.local/share/ai-sandbox/modules/<name>/`, `~/.local/bin`, `~/.claude/skills/` and
@@ -142,9 +145,16 @@ CLAUDE.md).
 
 ## What setup does
 
+Before any step, an unknown module name stops setup. Then `versions.toml` is validated, every
+listed module must have its `[modules.<name>]` entry, and its `requires` must be listed (on a fresh
+host, where the packages step hasn't installed `python3-tomli` yet, this part runs after the base
+steps).
+
+1. Base step `35-modules` copies each listed module's files (above) and records it as installed.
+   Step `70-claude-config` then adds every installed module's `claude.md` and `settings.json`.
+
 For each listed module, in list order, after the base steps:
 
-1. Copy the module's files (above).
 2. Check every tool of the module against `versions.toml`. Results, one per tool:
    - `ok dolt 1.xx.y`
    - `missing dolt` / `upgrade dolt 1.xx.y -> 1.zz.w` / `newer-than-pin dolt 1.zz.w > 1.xx.y` /
@@ -153,7 +163,8 @@ For each listed module, in list order, after the base steps:
    Anything but `ok` stops setup with the reason and the doc section to follow, e.g.
    `dolt 1.xx.y installed, pin is 1.zz.w: follow docs/beads.md#upgrading`. The installed version
    of an `opt/` tool is the version directory `~/.local/bin/<tool>` points at.
-3. Run the module's own checks (its credentials, its units), which also stop with a reason.
+3. Run the module's own steps (`modules/<name>/steps/`, shown as `<name>/<step>`), which also stop
+   with a reason when they can't do their part.
 
 `./setup.sh --check` reports all of this without changing anything. `ai-sandbox-versions` prints
 every listed module's tools with pinned and installed versions.

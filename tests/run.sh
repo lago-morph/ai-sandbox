@@ -16,6 +16,8 @@ new_home() {
   unset AI_SANDBOX_CONFIG AI_SANDBOX_SHARE AI_SANDBOX_BIN AI_SANDBOX_UNIT_DIR
   unset AI_SANDBOX_GIT_BASEDIR AI_SANDBOX_SECRETS_BACKEND AI_SANDBOX_SECRETS_DIR
   unset AI_SANDBOX_HOSTNAME AI_SANDBOX_NAME_PREFIX AI_SANDBOX_SPAWN_MODE AI_SANDBOX_PERMISSION_MODE AI_SANDBOX_REFRESH_INTERVAL
+  unset AI_SANDBOX_MODULES AI_SANDBOX_STATE AI_SANDBOX_VERSIONS AI_SANDBOX_MODULES_DIR AI_SANDBOX_PLATFORM
+  unset XDG_STATE_HOME DOLT_CREDS_JWK TEST_CRED
   mkdir -p "$HOME/.secrets" && chmod 700 "$HOME/.secrets"
   export PATH="$REPO/bin:$ORIG_PATH"
 }
@@ -41,9 +43,14 @@ assert_fails()    { if "$@" >/dev/null 2>&1; then echo "expected failure: $*"; r
 
 test_lint() {
   bash -n "$REPO/setup.sh"; bash -n "$REPO/setup-root.sh"; bash -n "$REPO/install.sh"
-  for f in "$REPO"/bin/* "$REPO"/lib/*.sh "$REPO"/lib/*/*.sh "$REPO"/tests/*.sh "$REPO"/cloud/*.sh; do bash -n "$f"; done
+  local files
+  files=$(cd "$REPO" && shopt -s nullglob && echo bin/* lib/*.sh lib/*/*.sh tests/*.sh cloud/*.sh \
+    modules/*/bin/* modules/*/steps/*.sh tests/fixtures/modules/*/bin/* tests/fixtures/modules/*/steps/*.sh)
+  for f in $files; do bash -n "$REPO/$f"; done
+  for f in "$REPO"/lib/*.py; do python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$f"; done
   if command -v shellcheck >/dev/null; then
-    (cd "$REPO" && shellcheck -x -S warning setup.sh setup-root.sh install.sh bin/* lib/*.sh lib/*/*.sh tests/*.sh cloud/*.sh)
+    # shellcheck disable=SC2086
+    (cd "$REPO" && shellcheck -x -S warning setup.sh setup-root.sh install.sh $files)
   else
     echo "(shellcheck not installed; syntax only)"
   fi
@@ -518,6 +525,186 @@ test_config_lean_tools() {
   ai-sandbox-init-config --force AI_SANDBOX_LEAN_TOOLS=off >/dev/null
   (config_load; assert_eq "$AI_SANDBOX_LEAN_TOOLS" off)
   assert_fails ai-sandbox-init-config --force AI_SANDBOX_LEAN_TOOLS=maybe
+}
+
+# ------------------------------------------------------------------ modules
+
+FIX="$REPO/tests/fixtures"
+use_fixture_modules() {
+  export AI_SANDBOX_VERSIONS="$FIX/versions.toml" AI_SANDBOX_MODULES_DIR="$FIX/modules"
+  # shellcheck source=../lib/common.sh
+  source "$AI_SANDBOX_LIB/common.sh"
+  # shellcheck source=../lib/modules.sh
+  source "$AI_SANDBOX_LIB/modules.sh"
+}
+toml() { local f="$T/v.toml"; cat > "$f"; echo "$f"; }
+
+test_versions_repo_file_valid() {
+  python3 "$REPO/lib/versions.py" "$REPO/versions.toml" validate
+  python3 "$REPO/lib/versions.py" "$FIX/versions.toml" validate
+}
+
+test_versions_validate_rejects() {
+  local v out
+  v=$(toml <<'X'
+[modules.m]
+[tools.a]
+module = "nope"
+version = "1.2"
+source = "github:o/r"
+[tools.b]
+module = "base"
+version = "==1.0"
+source = "system"
+[tools.c]
+module = "base"
+version = ">=1.0"
+source = "npm:c"
+extra = 1
+X
+)
+  out=$(python3 "$REPO/lib/versions.py" "$v" validate) && { echo "should be invalid"; return 1; }
+  assert_contains "$out" "[modules.m]: description is required"
+  assert_contains "$out" '[tools.a]: module must be "base"'
+  assert_contains "$out" "[tools.a]: not a version constraint: '1.2'"
+  assert_contains "$out" "[tools.a]: asset (release asset name) is required"
+  assert_contains "$out" '[tools.b]: a system tool gets a minimum (">=X"), not "=="'
+  assert_contains "$out" '[tools.c]: a npm tool is pinned exactly (version = "==X")'
+  assert_contains "$out" "[tools.c]: unknown key 'extra'"
+  assert_contains "$out" "[tools.c]: npm tools need a [tools.node] entry"
+  # A tool defined twice is a TOML error.
+  v=$(printf '[tools.a]\nmodule="base"\n[tools.a]\nmodule="base"\n' | toml)
+  assert_fails python3 "$REPO/lib/versions.py" "$v" validate
+}
+
+test_versions_check_results() {
+  use_fixture_modules
+  export AI_SANDBOX_PLATFORM=linux-amd64
+  mkdir -p "$T/fakebin"; export PATH="$T/fakebin:$PATH"
+  printf '#!/bin/sh\necho "fakesys version $FAKESYS_VERSION"\n' > "$T/fakebin/fakesys"; chmod +x "$T/fakebin/fakesys"
+  local out
+  export FAKESYS_VERSION=1.7.0
+  out=$(versions_py check alpha) && { echo "fakedl missing: should fail"; return 1; }
+  assert_contains "$out" "missing fakedl (pin 1.2.3): follow docs/alpha.md#installing"
+  assert_contains "$out" "ok fakesys 1.7.0"
+  for v in 1.2.2 1.2.3 1.3.0; do mkdir -p "$AI_SANDBOX_SHARE/opt/fakedl/$v"; touch "$AI_SANDBOX_SHARE/opt/fakedl/$v/fakedl"; done
+  mkdir -p "$AI_SANDBOX_BIN"
+  ln -sfn "$AI_SANDBOX_SHARE/opt/fakedl/1.2.3/fakedl" "$AI_SANDBOX_BIN/fakedl"
+  versions_py check alpha
+  ln -sfn "$AI_SANDBOX_SHARE/opt/fakedl/1.2.2/fakedl" "$AI_SANDBOX_BIN/fakedl"
+  assert_contains "$(versions_py check alpha)" "upgrade fakedl 1.2.2 -> 1.2.3: follow docs/alpha.md#upgrading"
+  ln -sfn "$AI_SANDBOX_SHARE/opt/fakedl/1.3.0/fakedl" "$AI_SANDBOX_BIN/fakedl"
+  assert_contains "$(versions_py check alpha)" "newer-than-pin fakedl 1.3.0 > 1.2.3"
+  rm "$AI_SANDBOX_BIN/fakedl"; touch "$AI_SANDBOX_BIN/fakedl"
+  assert_contains "$(versions_py check alpha)" "unmanaged fakedl"
+  assert_contains "$(AI_SANDBOX_PLATFORM=linux-arm64 versions_py check alpha)" "no-checksum fakedl linux-arm64"
+  assert_contains "$(FAKESYS_VERSION=1.5 versions_py check alpha)" "too-old fakesys 1.5 (needs >=1.6,<2)"
+  assert_contains "$(FAKESYS_VERSION=2.1 versions_py check alpha)" "unsupported fakesys 2.1 (needs >=1.6,<2)"
+  rm "$T/fakebin/fakesys"
+  assert_contains "$(versions_py check alpha)" "missing fakesys (needs >=1.6,<2)"
+}
+
+test_modules_preflight() {
+  use_fixture_modules
+  local out
+  AI_SANDBOX_MODULES="alpha nope"
+  out=$( (modules_preflight) 2>&1) && { echo "unknown module should fail"; return 1; }
+  assert_contains "$out" "unknown module 'nope' in AI_SANDBOX_MODULES; known modules: alpha beta"
+  AI_SANDBOX_MODULES="beta"
+  out=$( (modules_preflight) 2>&1) && { echo "missing requires should fail"; return 1; }
+  assert_contains "$out" "module 'beta' requires module 'alpha'"
+  AI_SANDBOX_MODULES="beta alpha beta"
+  modules_preflight
+  assert_eq "$(modules_listed | xargs)" "beta alpha"
+  cp -r "$FIX/modules" "$T/mods"; mkdir "$T/mods/gamma"; AI_SANDBOX_MODULES_DIR="$T/mods" AI_SANDBOX_MODULES=gamma
+  out=$( (modules_preflight) 2>&1) && { echo "module without toml entry should fail"; return 1; }
+  assert_contains "$out" "no [modules.gamma] in versions.toml"
+}
+
+test_module_files_install() {
+  use_fixture_modules
+  ai-sandbox-init-config >/dev/null; config_load
+  export AI_SANDBOX_MODULES=alpha
+  ! ( source "$REPO/lib/steps/35-modules.sh"; check ) 2>/dev/null
+  ( source "$REPO/lib/steps/35-modules.sh"; apply; check )
+  [ -x "$AI_SANDBOX_BIN/ai-sandbox-alpha-status" ]
+  [ -f "$HOME/.claude/skills/alpha-skill/SKILL.md" ]
+  assert_contains "$(cat "$AI_SANDBOX_UNIT_DIR/alpha.service")" "ExecStart=$AI_SANDBOX_BIN/ai-sandbox-alpha-status"
+  [ -f "$AI_SANDBOX_SHARE/modules/alpha/claude.md" ]
+  assert_eq "$(modules_installed)" alpha
+  assert_contains "$(modules_claude_md)" "Data lives in $AI_SANDBOX_SHARE/data/alpha."
+  # De-listed: nothing is removed, and it stays installed (so its lines and status remain).
+  AI_SANDBOX_MODULES=""
+  ( source "$REPO/lib/steps/35-modules.sh"; apply; check )
+  [ -x "$AI_SANDBOX_BIN/ai-sandbox-alpha-status" ] && [ -f "$HOME/.claude/skills/alpha-skill/SKILL.md" ]
+  assert_eq "$(modules_installed)" alpha
+  assert_eq "$(modules_settings_fragments)" "$AI_SANDBOX_SHARE/modules/alpha/settings.json"
+}
+
+test_status_command() {
+  use_fixture_modules
+  ai-sandbox-init-config AI_SANDBOX_MODULES=alpha >/dev/null; config_load
+  # No modules installed: nothing to say.
+  assert_eq "$(ai-sandbox-status --brief)" ""
+  ( source "$REPO/lib/steps/35-modules.sh"; apply )
+  export PATH="$AI_SANDBOX_BIN:$PATH"
+  assert_eq "$(ai-sandbox-status --brief)" ""
+  assert_contains "$(ai-sandbox-status)" "alpha: ok, running"
+  local out
+  out=$(ALPHA_STATUS_RC=2 ALPHA_STATUS_LINE="STOPPED ON PURPOSE by sync" ai-sandbox-status --brief)
+  assert_contains "$out" "ai-sandbox: alpha: STOPPED ON PURPOSE: STOPPED ON PURPOSE by sync"
+  assert_contains "$out" "run ai-sandbox-status for details"
+  out=$(ALPHA_STATUS_RC=1 ALPHA_STATUS_LINE="failed" ai-sandbox-status) && { echo "should exit non-zero"; return 1; }
+  assert_contains "$out" "alpha: UNHEALTHY: failed"
+  assert_contains "$out" "see docs/alpha.md#troubleshooting"
+  ai-sandbox-init-config --force >/dev/null
+  assert_contains "$(ai-sandbox-status)" "alpha: ok, running (installed, not listed)"
+}
+
+test_claude_settings_merge() {
+  # shellcheck source=../lib/common.sh
+  source "$AI_SANDBOX_LIB/common.sh"
+  mkdir -p "$HOME/.claude"
+  printf '{"permissions": {"deny": ["Bash(mine)"]}, "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "mine"}]}]}}\n' \
+    > "$HOME/.claude/settings.json"
+  local f="$REPO/templates/claude/session-start.json" a="$FIX/modules/alpha/settings.json"
+  assert_fails claude_settings_merge "$f" check
+  claude_settings_merge "$f" apply; claude_settings_merge "$a" apply
+  claude_settings_merge "$f" check; claude_settings_merge "$a" check
+  claude_settings_merge "$f" apply   # idempotent
+  python3 - "$HOME/.claude/settings.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d['permissions']['deny'] == ['Bash(mine)', 'Bash(alpha start:*)'], d
+cmds = [h['command'] for g in d['hooks']['SessionStart'] for h in g['hooks']]
+assert cmds[0] == 'mine' and len(cmds) == 2 and 'ai-sandbox-status --brief' in cmds[1], cmds
+PY
+}
+
+test_cred_source() {
+  # shellcheck source=../lib/common.sh
+  source "$AI_SANDBOX_LIB/common.sh"
+  ai-sandbox-init-config >/dev/null; config_load; secrets_init
+  assert_fails cred_source TEST_CRED testcred
+  printf 'from-file' | secret_set testcred
+  assert_eq "$(cred_source TEST_CRED testcred)" "secret file $HOME/.secrets/testcred"
+  assert_eq "$(cred_get TEST_CRED testcred)" from-file
+  export TEST_CRED=from-file
+  assert_eq "$(cred_source TEST_CRED testcred)" "env TEST_CRED"
+  rm "$HOME/.secrets/testcred"; TEST_CRED=from-env
+  assert_eq "$(cred_get TEST_CRED testcred)" from-env
+  printf 'other' | secret_set testcred
+  local out; out=$( (cred_get TEST_CRED testcred) 2>&1) && { echo "differing values should fail"; return 1; }
+  assert_contains "$out" "credential testcred differs between \$TEST_CRED and file $HOME/.secrets/testcred"
+  ! grep -q 'from-env\|other' <<<"$out" || { echo "a value was printed"; return 1; }
+}
+
+test_setup_stops_on_unknown_module() {
+  local base; base=$(dirname "$(dirname "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)")")
+  ai-sandbox-init-config "AI_SANDBOX_GIT_BASEDIR=$base" AI_SANDBOX_MODULES=nope >/dev/null
+  local out; out=$("$REPO/setup.sh" --check 2>&1) && { echo "should fail"; return 1; }
+  assert_contains "$out" "unknown module 'nope' in AI_SANDBOX_MODULES"
+  ! grep -q '^ok \|^PENDING' <<<"$out" || { echo "ran steps before stopping"; return 1; }
 }
 
 # ------------------------------------------------------------------ main

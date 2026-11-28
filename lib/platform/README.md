@@ -7,7 +7,7 @@ To add a distro, create `lib/platform/<ID>.sh` defining:
 
 | Function | Contract |
 |---|---|
-| `platform_missing_packages` | Print one name per line for each required tool not installed: `git`, `curl`, CA certificates, `python3`, and `gh` (GitHub CLI). Print nothing when all are present. |
+| `platform_missing_packages` | Print one name per line for each required tool not installed: `git`, `curl`, CA certificates, `python3`, the `tomli` Python module (reads `versions.toml`), and `gh` (GitHub CLI). Print nothing when all are present. |
 | `platform_install_packages NAME...` | Install the names printed above, using `sudo` as needed. |
 | `platform_hostname_check NAME` | Exit 0 if the hostname is set to persist as `NAME` and resolves (it may still need a restart); print what's missing with `info`. |
 | `platform_hostname_apply NAME` | Make it so, using `sudo`. Don't restart anything. |

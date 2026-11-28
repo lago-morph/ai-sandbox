@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Test fixture: prints $ALPHA_STATUS_LINE and exits $ALPHA_STATUS_RC.
+echo "${ALPHA_STATUS_LINE:-running}"
+exit "${ALPHA_STATUS_RC:-0}"

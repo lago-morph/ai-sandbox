@@ -34,13 +34,19 @@ Read README.md for what setup does, the config keys, and the layout.
 - Files setup manages (don't hand-edit; change the repo and re-run setup): `~/.local/bin/{rc-*,ai-sandbox-*}`,
   `~/.local/share/ai-sandbox/`, `~/.config/systemd/user/{rc@.service,rc-refresh.*}`, the
   ai-sandbox block in `~/.claude/CLAUDE.md`, `remoteDialogSeen` in `~/.claude.json`, the `(ai-sandbox)` auto mode rules, the `Bash`
-  allow rule, and the lean-tools deny rules and `enableArtifact` in `~/.claude/settings.json`, and (with `AI_SANDBOX_HOSTNAME`) `/etc/wsl.conf`
+  allow rule, and the lean-tools deny rules, `enableArtifact`, the `ai-sandbox-status` SessionStart hook and modules' entries in `~/.claude/settings.json`; for each installed module its `~/.local/bin/ai-sandbox-<name>-*` commands, skills in `~/.claude/skills/`, units in `~/.config/systemd/user/`, and `~/.local/state/ai-sandbox/modules-installed`; and (with `AI_SANDBOX_HOSTNAME`) `/etc/wsl.conf`
   `[network]`, `/etc/hosts`'s `127.0.1.1` line.
+
+## Troubleshooting the host
+When asked what went wrong on this host, run `ai-sandbox-status` first, before reading service
+logs or changing anything; then follow the module's `docs/<name>.md` Troubleshooting section.
+Services can be stopped on purpose, and those stops are the first thing to rule out.
 
 ## Developing
 - Run `tests/run.sh` before every commit (it needs `shellcheck`; tests use a throwaway `$HOME`).
   `tests/run.sh --host` also runs `./setup.sh --check` against this machine, read-only.
 - Bash with `set -euo pipefail`; keep `shellcheck -S warning` clean.
+- Tool versions live only in `versions.toml`; modules in `modules/<name>/` (docs/modules.md).
 - Steps in `lib/steps/` define `check` (report only, exit 1 if work is needed) and `apply`
   (idempotent). Secrets only through `secret_get`/`secret_has`; distro specifics only in
   `lib/platform/`.

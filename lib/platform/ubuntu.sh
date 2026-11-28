@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Platform support for Ubuntu (tested: 26.04 on WSL2; intended: Ubuntu on AWS EC2).
 
-PLATFORM_PACKAGES=(git curl ca-certificates python3)
+PLATFORM_PACKAGES=(git curl ca-certificates python3 python3-tomli)
 
 # Prints the packages from PLATFORM_PACKAGES (plus gh) that aren't installed.
 platform_missing_packages() {

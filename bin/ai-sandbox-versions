@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Usage: ai-sandbox-versions
+# Every tool of the base setup and of each listed module: the version versions.toml asks for,
+# the version installed, and the result of the check setup runs. See docs/modules.md.
+set -euo pipefail
+here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+if [ -z "${AI_SANDBOX_LIB:-}" ]; then
+  if [ -f "$here/../setup.sh" ]; then AI_SANDBOX_LIB=$(cd "$here/../lib" && pwd); else AI_SANDBOX_LIB=$HOME/.local/share/ai-sandbox/lib; fi
+fi
+# shellcheck source=../lib/common.sh
+source "$AI_SANDBOX_LIB/common.sh"
+# shellcheck source=../lib/modules.sh
+source "$AI_SANDBOX_LIB/modules.sh"
+config_require
+# shellcheck disable=SC2046
+versions_py show base $(modules_listed)

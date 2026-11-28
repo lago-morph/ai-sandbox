@@ -95,15 +95,16 @@ setup tells you when that's still needed.
 | Step | What it ensures |
 |---|---|
 | `00-platform` | Supported distro, systemd as PID 1 with a user manager, passwordless sudo (from `setup-root.sh`). Enables systemd on WSL if needed. |
-| `10-packages` | `git`, `curl`, CA certificates, `python3`, and `gh` (from GitHub's apt repo). |
+| `10-packages` | `git`, `curl`, CA certificates, `python3` with `tomli`, and `gh` (from GitHub's apt repo), at least the versions in `versions.toml`. |
 | `12-groups` | The user is in the `kvm` group (created if missing), for `/dev/kvm`. Takes effect after a restart. |
 | `15-hostname` | With `AI_SANDBOX_HOSTNAME`: on WSL, `[network] hostname` and `generateHosts = false` in `/etc/wsl.conf`; elsewhere, `hostnamectl` and cloud-init's `preserve_hostname`. Both: the `127.0.1.1` line in `/etc/hosts`. Originals kept as `*.bak-ai-sandbox`. |
 | `20-claude-cli` | Claude Code's native build in `~/.local/bin/claude`. |
-| `30-install` | This repo's `bin/` commands in `~/.local/bin`; `lib/`, `config/`, `templates/` in `~/.local/share/ai-sandbox`. |
+| `30-install` | This repo's `bin/` commands in `~/.local/bin`; `lib/`, `config/`, `templates/` and `versions.toml` in `~/.local/share/ai-sandbox`. |
+| `35-modules` | Each module in `AI_SANDBOX_MODULES`: its files copied onto the host (commands, skills, units, `~/.local/share/ai-sandbox/modules/<name>/`). See [Modules](#modules). |
 | `40-secrets` | Secrets storage is private (700/600) and the GitHub token is present. |
 | `50-github` | `git` gets the token from `ai-sandbox-git-credential` for github.com; `gh` is logged in with it; if git has no commit identity, it uses the token's GitHub account and noreply email. |
 | `60-claude-auth` | Claude is logged in to claude.ai; if not, it runs `claude auth login` (in a terminal). |
-| `70-claude-config` | A managed block of host conventions in `~/.claude/CLAUDE.md`; this repo trusted; Remote Control's one-time "Enable Remote Control?" answered yes for you (`remoteDialogSeen` in `~/.claude.json`), since a server under systemd can't answer it and exits. With `bypassPermissions`: the dangerous-mode warning pre-accepted, and the ai-sandbox auto mode rules plus a `Bash` allow rule in `~/.claude/settings.json` (see [Permission modes](#permission-modes)). With `AI_SANDBOX_LEAN_TOOLS=on`: the lean-tools deny rules and `enableArtifact: false` in `~/.claude/settings.json`. |
+| `70-claude-config` | A managed block of host conventions in `~/.claude/CLAUDE.md`; this repo trusted; Remote Control's one-time "Enable Remote Control?" answered yes for you (`remoteDialogSeen` in `~/.claude.json`), since a server under systemd can't answer it and exits. With `bypassPermissions`: the dangerous-mode warning pre-accepted, and the ai-sandbox auto mode rules plus a `Bash` allow rule in `~/.claude/settings.json` (see [Permission modes](#permission-modes)). With `AI_SANDBOX_LEAN_TOOLS=on`: the lean-tools deny rules and `enableArtifact: false` in `~/.claude/settings.json`. Always: a SessionStart hook running `ai-sandbox-status --brief`, plus each installed module's CLAUDE.md lines and settings entries. |
 | `80-systemd` | Lingering, the `rc@` unit template, `rc-refresh.timer`, and `rc@ai-sandbox` enabled at boot and running (it must stay up for a few seconds; otherwise setup shows its last output). |
 
 ### Day to day
@@ -117,6 +118,8 @@ setup tells you when that's still needed.
 | Check the host matches this repo (changes nothing) | `./setup.sh --check` |
 | Logs of the last install / setup run | `~/.local/state/ai-sandbox/install.log`, `setup.log` |
 | Run the tests | `tests/run.sh` (add `--host` to include `./setup.sh --check`) |
+| Something on the host isn't working | `ai-sandbox-status` (modules' health, stops on purpose first) |
+| Tool versions: wanted vs installed | `ai-sandbox-versions` |
 
 Only `rc@ai-sandbox` starts at boot. Other repos are served until you stop them or the machine
 restarts. Every served repo's main checkout is fast-forwarded every 10 minutes (only when it's
@@ -142,6 +145,7 @@ or edit it by hand, then re-run `./setup.sh`. The repo's `host-config` skill can
 | `AI_SANDBOX_SPAWN_MODE` | `worktree` | `worktree`: each session gets its own git worktree. `same-dir`: sessions share the main checkout. |
 | `AI_SANDBOX_PERMISSION_MODE` | empty | Permission mode for new sessions (`bypassPermissions`, `acceptEdits`, `auto`, `default`, `dontAsk`, `plan`). Empty: use `~/.claude/settings.json`. The Claude app can override it; see [Permission modes](#permission-modes). |
 | `AI_SANDBOX_REFRESH_INTERVAL` | `10min` | How often served repos are fast-forwarded (systemd time span). |
+| `AI_SANDBOX_MODULES` | empty | Modules this host uses, space-separated ([Modules](#modules)). Removing a name never uninstalls anything; an unknown name stops setup. |
 | `AI_SANDBOX_LEAN_TOOLS` | `on` | `on`: the deny rules in `templates/claude/lean-tools.json` go into `~/.claude/settings.json`, so tools sessions don't use aren't loaded into their context (see [Fewer unused tools](#cloud-sessions-fewer-unused-tools)). `off`: those rules are removed. |
 
 **Secrets** (names as used by the backend; with `file`, these are file names in the secrets dir):
@@ -234,6 +238,23 @@ Which of the four rule forms per server does it wasn't isolated; they're all kep
 Claude Docs' server instructions (about 0.5K tokens) are still added even though its tools are
 denied. ScheduleWakeup (only used by `/loop`) was added to the list after that test.
 
+## Modules
+
+> **Untested.** The framework is covered by the unit tests, but no module exists yet and none
+> has run on a real host.
+
+A module owns one set of shared software (the first planned one is beads: [docs/beads.md](docs/beads.md)).
+The design is in [docs/modules.md](docs/modules.md). In short:
+
+- [`versions.toml`](versions.toml) lists every module and the version of every tool ai-sandbox
+  installs (`==`) or relies on from the distro (`>=`).
+- `AI_SANDBOX_MODULES` turns modules on. Setup copies their files and **checks** their tools; it
+  never installs or upgrades a tool. When a tool is missing or doesn't match, setup stops and names
+  the section of `docs/<module>.md` to follow; the session running setup follows it, then re-runs
+  setup.
+- `ai-sandbox-status` is the first thing to run when something isn't working; every session also
+  gets its `--brief` output at start (nothing when all is well).
+
 ## Security notes
 
 - Remote Control only makes outbound HTTPS connections; no inbound ports are needed. On EC2,
@@ -261,6 +282,8 @@ denied. ScheduleWakeup (only used by `/loop`) was added to the list after that t
   `AI_SANDBOX_SECRETS_BACKEND=<name>`. Nothing else reads secrets directly.
 - **New setup step:** add `lib/steps/NN-name.sh` defining `check` (report-only; exit 1 if work
   is needed) and `apply`. Steps run in file-name order.
+- **New module:** add `modules/<name>/`, its entries in `versions.toml` and `docs/<name>.md`
+  ([docs/modules.md](docs/modules.md)).
 
 ## Layout
 
@@ -274,14 +297,20 @@ bin/                      commands installed to ~/.local/bin
   ai-sandbox-git-credential git credential helper backed by the secrets backend
   ai-sandbox-secret         has/describe/get/set a secret
   ai-sandbox-init-config    create the host config
-lib/common.sh             config, secrets interface, helpers
+  ai-sandbox-status         health of the installed modules
+  ai-sandbox-versions       tool versions: wanted vs installed
+versions.toml             modules and tool versions
+modules/                  one directory per module
+lib/common.sh             config, secrets interface, credentials, helpers
+lib/modules.sh            modules: listing, preflight, file install
+lib/versions.py           reads versions.toml, checks tool versions
 lib/steps/                setup steps
 lib/platform/             distro support
 lib/secrets/              secrets backends
 templates/                systemd units, the ~/.claude/CLAUDE.md block, lean-tools.json
 cloud/setup.sh            setup script for claude.ai/code environments
 config/                   example host config
-tests/run.sh              regression tests
+tests/run.sh              regression tests (fixtures in tests/fixtures/)
 .claude/skills/           skills for sessions in this repo
 CLAUDE.md                 instructions for sessions in this repo
 ```

@@ -34,18 +34,28 @@ export AI_SANDBOX_SELF_DIR AI_SANDBOX_SELF_NAME
 [ "$(dirname "$AI_SANDBOX_SELF_DIR")" = "$AI_SANDBOX_GIT_BASEDIR" ] ||
   die "the ai-sandbox repo must be cloned directly in AI_SANDBOX_GIT_BASEDIR ($AI_SANDBOX_GIT_BASEDIR), found at $AI_SANDBOX_SELF_DIR"
 
+# shellcheck source=lib/modules.sh
+source "$AI_SANDBOX_LIB/modules.sh"
+# Modules (docs/modules.md): stop on an unknown name before any step. The full check needs the
+# TOML reader, which a fresh host only gets from the packages step; it then runs after the base steps.
+modules_check_names
+preflight_done=0
+if [ -n "$AI_SANDBOX_MODULES" ] && tomli_available; then modules_preflight; preflight_done=1; fi
+
 [ $mode = check ] || start_log setup
 log "ai-sandbox $mode: $(git -C "$AI_SANDBOX_REPO_DIR" describe --always --dirty) from $AI_SANDBOX_REPO_DIR, config $AI_SANDBOX_CONFIG"
 pending=0 applied=0
-for step in "$AI_SANDBOX_LIB"/steps/[0-9]*.sh; do
-  name=$(basename "$step" .sh)
+
+# run_step NAME FILE: check the step; in apply mode apply it if needed and check again.
+run_step() {
+  local name=$1 step=$2
   # shellcheck source=/dev/null
   if ( source "$step"; check ); then
     log "ok      $name"
-    continue
+    return 0
   fi
   if [ $mode = check ]; then
-    log "PENDING $name"; pending=1; continue
+    log "PENDING $name"; pending=1; return 0
   fi
   log "apply   $name  [$(ts)]"
   # shellcheck source=/dev/null
@@ -54,7 +64,37 @@ for step in "$AI_SANDBOX_LIB"/steps/[0-9]*.sh; do
   ( source "$step"; check ) || die "step $name still not satisfied after applying it"
   log "applied $name  [$(ts)]"
   applied=1
+}
+
+for step in "$AI_SANDBOX_LIB"/steps/[0-9]*.sh; do
+  run_step "$(basename "$step" .sh)" "$step"
 done
+
+# Each listed module, in list order: its tools against versions.toml (installed and upgraded by
+# an agent following the module's doc, never by setup), then its own steps.
+if [ -n "$AI_SANDBOX_MODULES" ]; then
+  if [ $preflight_done = 0 ]; then
+    if tomli_available; then modules_preflight
+    else log "PENDING modules: python3-tomli is needed to read versions.toml (the packages step installs it)"; pending=1; fi
+  fi
+  if tomli_available; then
+    for m in $(modules_listed); do
+      if out=$(module_tools_check "$m"); then
+        log "ok      $m/tools"
+      else
+        bad=$(grep -v '^ok ' <<<"$out")
+        if [ $mode = check ]; then
+          log "PENDING $m/tools"; while read -r l; do info "$l"; done <<<"$bad"; pending=1; continue
+        fi
+        die "module $m: its tools need an agent (setup doesn't install them):"$'\n'"$(sed 's/^/   /' <<<"$bad")"
+      fi
+      for step in "$AI_SANDBOX_MODULES_DIR/$m"/steps/[0-9]*.sh; do
+        [ -f "$step" ] || continue
+        AI_SANDBOX_MODULE=$m AI_SANDBOX_MODULE_DIR="$AI_SANDBOX_MODULES_DIR/$m" run_step "$m/$(basename "$step" .sh)" "$step"
+      done
+    done
+  fi
+fi
 
 if [ $mode = check ]; then
   [ $pending = 0 ] && log "host is up to date" || log "run ./setup.sh to apply pending steps"
