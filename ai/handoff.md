@@ -46,14 +46,16 @@ PR: https://github.com/lago-morph/ai-sandbox/pull/26 (merged)
     halt. Handoff Q1 safety rules are in the pilot section.
 
 ## Next steps
-1. Owner reviews and merges the `design-review-fixes` PR. (serves: design is complete)
-2. Implement the framework: `versions.toml` + reader/checker, module file copying, installed-modules
-   record, credentials helper, `ai-sandbox-status`/`ai-sandbox-versions`, SessionStart hook,
-   settings/claude.md merging in step 70, tests. One PR. (serves: modules)
-3. Implement `modules/beads/` per docs/beads.md; pick the dolt pin (latest stable, sha256 from the
-   release digest; memory: beads-use-latest-stable). Update CLAUDE.md managed-files list, README
-   (mark untested). (serves: beads)
-4. Owner removes the npm bd; run `./setup.sh --check`, install per docs/beads.md#installing, owner
+1. ~~Implement the framework~~: done on branch `modules-framework` (PR follows): `versions.toml`,
+   `lib/versions.py`, `lib/modules.sh`, step `35-modules`, module phase in `setup.sh`, credentials
+   helper (`cred_source`/`cred_get`), `ai-sandbox-status`/`ai-sandbox-versions`, SessionStart hook,
+   tests with fixtures. Host not changed: `./setup.sh` not run (pending: 30-install, 70 hook).
+   `python3-tomli` was installed by hand on the laptop for the tests; step 10 now installs it.
+2. Implement `modules/beads/` per docs/beads.md: `[modules.beads]` + dolt/bd in `versions.toml`
+   (dolt latest stable, sha256 from the release digest; memory: beads-use-latest-stable), commands,
+   steps (credentials, units), skill, claude.md, settings.json deny rules. README: mark untested.
+   (serves: beads)
+3. Owner removes the npm bd; run `./setup.sh --check`, install per docs/beads.md#installing, owner
    registers the key; run the pilot. (serves: beads works)
 
 ## Open questions

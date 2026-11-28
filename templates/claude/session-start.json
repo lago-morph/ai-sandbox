@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v ai-sandbox-status >/dev/null && ai-sandbox-status --brief || true"
+          }
+        ]
+      }
+    ]
+  }
+}

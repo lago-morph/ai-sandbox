@@ -9,6 +9,12 @@
 # everything. Otherwise they're removed.
 # With AI_SANDBOX_LEAN_TOOLS=on (default), the deny rules in templates/claude/lean-tools.json, so
 # tools sessions don't use aren't loaded into their context; with off, they're removed.
+# Also: each installed module's claude.md lines appended to the block and its settings.json
+# entries merged in, and the SessionStart hook (templates/claude/session-start.json) that runs
+# `ai-sandbox-status --brief` so every session starts with a line about anything unhealthy.
+
+# shellcheck source=../modules.sh
+source "$AI_SANDBOX_LIB/modules.sh"
 
 _bypass_ok() {
   [ "$AI_SANDBOX_PERMISSION_MODE" = bypassPermissions ] || return 0
@@ -38,7 +44,12 @@ _auto_mode_tpl() { echo "$AI_SANDBOX_REPO_DIR/templates/claude/auto-mode.json"; 
 _lean_action() { [ "$AI_SANDBOX_LEAN_TOOLS" = on ] && echo applied || echo removed; }
 _lean_tpl() { echo "$AI_SANDBOX_REPO_DIR/templates/claude/lean-tools.json"; }
 
-_rendered() { local t; t=$(mktemp); render "$AI_SANDBOX_REPO_DIR/templates/claude/CLAUDE.md" > "$t"; echo "$t"; }
+_rendered() {
+  local t; t=$(mktemp)
+  { render "$AI_SANDBOX_REPO_DIR/templates/claude/CLAUDE.md"; modules_claude_md; } > "$t"
+  echo "$t"
+}
+_fragments() { echo "$AI_SANDBOX_REPO_DIR/templates/claude/session-start.json"; modules_settings_fragments; }
 
 check() {
   local ok=0 t; t=$(_rendered)
@@ -51,6 +62,10 @@ check() {
     { info "ai-sandbox auto mode rules in ~/.claude/settings.json should be $(_auto_mode_action)"; ok=1; }
   claude_lean_tools "$(_lean_tpl)" "check-$(_lean_action)" ||
     { info "lean-tools deny rules in ~/.claude/settings.json should be $(_lean_action) (AI_SANDBOX_LEAN_TOOLS=$AI_SANDBOX_LEAN_TOOLS)"; ok=1; }
+  local f
+  for f in $(_fragments); do
+    claude_settings_merge "$f" check || { info "$HOME/.claude/settings.json lacks the entries from $f"; ok=1; }
+  done
   return $ok
 }
 
@@ -71,4 +86,6 @@ apply() {
   else
     claude_lean_tools "$(_lean_tpl)" remove
   fi
+  local f
+  for f in $(_fragments); do claude_settings_merge "$f" apply; done
 }

@@ -6,6 +6,11 @@ AI_SANDBOX_CONFIG=${AI_SANDBOX_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/ai-sand
 AI_SANDBOX_SHARE=${AI_SANDBOX_SHARE:-$HOME/.local/share/ai-sandbox}
 AI_SANDBOX_BIN=${AI_SANDBOX_BIN:-$HOME/.local/bin}
 AI_SANDBOX_UNIT_DIR=${AI_SANDBOX_UNIT_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user}
+AI_SANDBOX_STATE=${AI_SANDBOX_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/ai-sandbox}
+# versions.toml and modules/ sit next to lib/: in the repo when run from a checkout, in
+# ~/.local/share/ai-sandbox once installed (where modules/ holds only the modules setup copied).
+AI_SANDBOX_VERSIONS=${AI_SANDBOX_VERSIONS:-${AI_SANDBOX_LIB:-}/../versions.toml}
+AI_SANDBOX_MODULES_DIR=${AI_SANDBOX_MODULES_DIR:-${AI_SANDBOX_LIB:-}/../modules}
 
 # Names of secrets, as passed to secret_get / secret_has.
 # shellcheck disable=SC2034  # used by scripts that source this file
@@ -46,6 +51,7 @@ config_defaults() {
   : "${AI_SANDBOX_PERMISSION_MODE:=}"
   : "${AI_SANDBOX_REFRESH_INTERVAL:=10min}"
   : "${AI_SANDBOX_LEAN_TOOLS:=on}"
+  : "${AI_SANDBOX_MODULES:=}"
 }
 
 config_validate() {
@@ -67,6 +73,10 @@ config_validate() {
     die "AI_SANDBOX_HOSTNAME must be a lowercase hostname label (letters, digits, '-'; got '$AI_SANDBOX_HOSTNAME')"
   [[ "$AI_SANDBOX_NAME_PREFIX" =~ ^[A-Za-z0-9_.-]*$ ]] ||
     die "AI_SANDBOX_NAME_PREFIX may only contain letters, digits, '.', '_' and '-'"
+  local m
+  for m in $AI_SANDBOX_MODULES; do
+    [[ "$m" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "AI_SANDBOX_MODULES: not a module name: '$m'"
+  done
   AI_SANDBOX_GIT_BASEDIR=${AI_SANDBOX_GIT_BASEDIR%/}
 }
 
@@ -108,6 +118,32 @@ secret_describe() { secrets_backend_describe "$1"; }
 secret_set() {
   [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "not a valid secret name: $1"
   secrets_backend_set "$1"
+}
+
+# ---------------------------------------------------------------- credentials
+# A credential (or the account name that goes with one) comes from an environment variable
+# first, then the secrets backend. See docs/modules.md#credentials. Callers run secrets_init.
+
+# cred_source VAR SECRET: prints "env VAR" or "secret <where>"; exit 1 if neither is set.
+# Dies if both are set and differ (without printing either value).
+cred_source() {
+  local var=$1 name=$2 env_val
+  env_val=${!var:-}
+  if [ -n "$env_val" ] && secret_has "$name"; then
+    [ "$env_val" = "$(secret_get "$name")" ] ||
+      die "credential $name differs between \$$var and $(secret_describe "$name"): keep one, or make them the same"
+    printf 'env %s\n' "$var"; return 0
+  fi
+  if [ -n "$env_val" ]; then printf 'env %s\n' "$var"; return 0; fi
+  if secret_has "$name"; then printf 'secret %s\n' "$(secret_describe "$name")"; return 0; fi
+  return 1
+}
+
+# cred_get VAR SECRET: prints the value (pipe it to the program that needs it, never to a log).
+# Exit 1 if neither is set; dies if both are set and differ.
+cred_get() {
+  local src; src=$(cred_source "$1" "$2") || return 1
+  case "$src" in env*) printf '%s' "${!1}" ;; *) secret_get "$2" ;; esac
 }
 
 # ---------------------------------------------------------------- platform
@@ -361,6 +397,40 @@ if d != cur:
 PY
 }
 
+# claude_settings_merge FRAGMENT apply|check: adds FRAGMENT's permissions.deny/allow entries and
+# hooks (matched by command) to ~/.claude/settings.json, keeping everything else. Additive only:
+# what modules put there stays (modules are never uninstalled). check exits 1 if apply would
+# change the file.
+claude_settings_merge() {
+  python3 - "$@" <<'PY'
+import json, os, sys
+frag_path, action = sys.argv[1], sys.argv[2]
+frag = json.load(open(frag_path))
+p = os.path.expanduser('~/.claude/settings.json')
+cur = json.load(open(p)) if os.path.exists(p) else {}
+d = json.loads(json.dumps(cur))
+for key in ('deny', 'allow'):
+    ours = frag.get('permissions', {}).get(key, [])
+    if ours:
+        lst = d.setdefault('permissions', {}).setdefault(key, [])
+        lst += [e for e in ours if e not in lst]
+for event, groups in frag.get('hooks', {}).items():
+    have = d.setdefault('hooks', {}).setdefault(event, [])
+    cmds = {h.get('command') for g in have for h in g.get('hooks', [])}
+    for g in groups:
+        if not all(h.get('command') in cmds for h in g.get('hooks', [])):
+            have.append(g)
+if action == 'check':
+    sys.exit(0 if d == cur else 1)
+if d != cur:
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + '.ai-sandbox.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(d, f, indent=2); f.write('\n')
+    os.replace(tmp, p)
+PY
+}
+
 # hosts_render FILE NAME -> stdout: FILE with its 127.0.1.1 line set to "NAME.localdomain NAME"
 # (added after the 127.0.0.1 line if missing) and WSL's "generated file" header dropped.
 hosts_render() {
@@ -428,7 +498,9 @@ root_file_write() {
   sudo tee "$1" < "$2" >/dev/null
 }
 
-# render TEMPLATE  -> stdout, substituting @VARS@ from the loaded config
+# render TEMPLATE  -> stdout, substituting @VARS@ from the loaded config and the install paths
 render() {
-  sed -e "s|@REFRESH_INTERVAL@|$AI_SANDBOX_REFRESH_INTERVAL|g" -e "s|@GIT_BASEDIR@|$AI_SANDBOX_GIT_BASEDIR|g" "$1"
+  sed -e "s|@REFRESH_INTERVAL@|$AI_SANDBOX_REFRESH_INTERVAL|g" -e "s|@GIT_BASEDIR@|$AI_SANDBOX_GIT_BASEDIR|g" \
+    -e "s|@HOME@|$HOME|g" -e "s|@BIN@|$AI_SANDBOX_BIN|g" -e "s|@SHARE@|$AI_SANDBOX_SHARE|g" \
+    -e "s|@STATE@|$AI_SANDBOX_STATE|g" -e "s|@DATA@|$AI_SANDBOX_SHARE/data|g" "$1"
 }

@@ -1,6 +1,6 @@
 ---
 name: host-config
-description: Create, show or change this machine's ai-sandbox host config (~/.config/ai-sandbox/config) and apply it. Use when the user asks to set up or change the sandbox's hostname, name prefix, permission mode, git base dir, secrets location/backend, spawn mode, or refresh interval, or asks what the host config is.
+description: Create, show or change this machine's ai-sandbox host config (~/.config/ai-sandbox/config) and apply it. Use when the user asks to set up or change the sandbox's hostname, name prefix, permission mode, git base dir, secrets location/backend, spawn mode, refresh interval, or which modules it uses (AI_SANDBOX_MODULES), or asks what the host config is.
 ---
 
 # ai-sandbox host config
@@ -31,6 +31,9 @@ current one and confirming. It validates the result before writing it.
    ai-sandbox repo's own server ends this session. Ask first.
 
 ## Cautions
+- `AI_SANDBOX_MODULES` turns modules on (docs/modules.md). Removing a name never uninstalls
+  anything. After adding one, setup stops until its tools are installed by following
+  `docs/<module>.md#installing`; tell the user that's the next step.
 - `AI_SANDBOX_SPAWN_MODE=same-dir` and a non-default `AI_SANDBOX_SECRETS_DIR` are untested on a
   real host. Say so when the user picks one.
 - Changing `AI_SANDBOX_GIT_BASEDIR` doesn't move existing checkouts, and this repo must be

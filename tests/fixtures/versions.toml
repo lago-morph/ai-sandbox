@@ -1,0 +1,20 @@
+# Fixture for tests/run.sh.
+[modules.alpha]
+description = "Alpha test module"
+
+[modules.beta]
+description = "Beta test module"
+requires    = ["alpha"]
+
+[tools.fakedl]
+module  = "alpha"
+version = "==1.2.3"
+source  = "github:example/fakedl"
+asset   = "fakedl-{platform}.tar.gz"
+sha256.linux-amd64 = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[tools.fakesys]
+module      = "alpha"
+version     = ">=1.6,<2"
+source      = "system"
+version_cmd = "fakesys --version"

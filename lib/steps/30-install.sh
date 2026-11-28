@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Copies this repo's commands to ~/.local/bin and its lib/config/templates to
+# Copies this repo's commands to ~/.local/bin and its lib/config/templates and versions.toml to
 # ~/.local/share/ai-sandbox. The host only changes when setup is run again.
 
 INSTALL_DIRS=(lib config templates)
@@ -14,6 +14,7 @@ check() {
   for d in "${INSTALL_DIRS[@]}"; do
     diff -rq "$AI_SANDBOX_REPO_DIR/$d" "$AI_SANDBOX_SHARE/$d" >/dev/null 2>&1 || { info "$AI_SANDBOX_SHARE/$d is missing or differs"; ok=1; }
   done
+  cmp -s "$AI_SANDBOX_REPO_DIR/versions.toml" "$AI_SANDBOX_SHARE/versions.toml" || { info "$AI_SANDBOX_SHARE/versions.toml is missing or differs"; ok=1; }
   return $ok
 }
 
@@ -32,5 +33,6 @@ apply() {
     rm -rf "${AI_SANDBOX_SHARE:?}/${d:?}"
     cp -r "$AI_SANDBOX_REPO_DIR/$d" "$AI_SANDBOX_SHARE/$d"
   done
+  cp "$AI_SANDBOX_REPO_DIR/versions.toml" "$AI_SANDBOX_SHARE/versions.toml"
   git -C "$AI_SANDBOX_REPO_DIR" describe --always --dirty > "$AI_SANDBOX_SHARE/VERSION" 2>/dev/null || true
 }

@@ -1,0 +1,29 @@
+# Modules and the versions of every tool ai-sandbox installs or relies on. See docs/modules.md.
+#
+# [modules.<name>]  description (required), requires = [other modules], doc (default docs/<name>.md)
+# [tools.<name>]    module ("base" = the base setup), version, source, and per source:
+#   github:<owner>/<repo>  asset, platforms, sha256.<platform>   pinned "==X"
+#   url:<template>         sha256.<platform>                     pinned "==X"
+#   npm:<package> / pypi:<package>   version_cmd (optional)      pinned "==X"
+#   system                 version_cmd (optional)                minimum ">=X" (distro package)
+# Versions: "==X", ">=X", "<X", joined by "," (Python specifier syntax, that subset only).
+
+[tools.git]
+module  = "base"
+version = ">=2.30"
+source  = "system"
+
+[tools.curl]
+module  = "base"
+version = ">=7.68"
+source  = "system"
+
+[tools.python3]
+module  = "base"
+version = ">=3.8"
+source  = "system"
+
+[tools.gh]
+module  = "base"
+version = ">=2.40"
+source  = "system"
