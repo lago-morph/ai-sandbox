@@ -681,6 +681,18 @@ assert cmds[0] == 'mine' and len(cmds) == 2 and 'ai-sandbox-status --brief' in c
 PY
 }
 
+test_lean_tools_and_module_denies_coexist() {
+  # Both write permissions.deny; applying one must not make the other's check fail.
+  # shellcheck source=../lib/common.sh
+  source "$AI_SANDBOX_LIB/common.sh"
+  local lean="$REPO/templates/claude/lean-tools.json" mod="$REPO/modules/beads/settings.json"
+  claude_lean_tools "$lean" apply; claude_settings_merge "$mod" apply
+  claude_lean_tools "$lean" check-applied; claude_settings_merge "$mod" check
+  claude_lean_tools "$lean" apply
+  claude_lean_tools "$lean" check-applied; claude_settings_merge "$mod" check
+  claude_lean_tools "$lean" remove; claude_lean_tools "$lean" check-removed; claude_settings_merge "$mod" check
+}
+
 test_cred_source() {
   # shellcheck source=../lib/common.sh
   source "$AI_SANDBOX_LIB/common.sh"

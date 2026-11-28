@@ -362,8 +362,11 @@ install = action in ('apply', 'check-applied')
 
 ours = tpl['permissions']['deny']
 perms = d.get('permissions', {})
-deny = [e for e in perms.get('deny', []) if e not in ours]
-if install: deny += ours
+# Order-preserving: entries already there stay where they are (other writers, such as modules'
+# settings.json, add to the same list), missing ones are appended.
+cur_deny = perms.get('deny', [])
+if install: deny = cur_deny + [e for e in ours if e not in cur_deny]
+else: deny = [e for e in cur_deny if e not in ours]
 if deny: perms['deny'] = deny
 else: perms.pop('deny', None)
 if perms: d['permissions'] = perms
