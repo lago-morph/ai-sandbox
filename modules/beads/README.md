@@ -85,7 +85,10 @@ before anything that discards or overwrites data.
 - **No DoltHub remote:** onboard the repo through the skill, or (owner's choice) move it back to
   embedded mode and drop the database from the server; then resume.
 - **Diverged** (server is stopped). First, back up: `cp -a` the database directory
-  (`~/.local/share/ai-sandbox/data/beads/<db>`) next to it. Then in that directory:
+  (`~/.local/share/ai-sandbox/data/beads/<db>`) to
+  `~/.local/share/ai-sandbox/data/beads-backups/<db>-<YYYYMMDDTHHMM>`. Never inside the data
+  directory: every directory there is served as a database (and resume would check it). Then in
+  the database's directory:
   `dolt fetch dolthub`, and compare `dolt log main..dolthub/main` with `dolt log dolthub/main..main`.
   Then one of:
   - merge: `dolt merge dolthub/main`, resolve with `dolt conflicts`, commit;
@@ -122,7 +125,8 @@ can't override a halt.
 
 Why 127.0.1.1: bd 1.3.4 treats a server whose host isn't `localhost`, `127.0.0.1`, `::1` or
 `0.0.0.0` as external, and then refuses to start a server of its own (auto-start and
-`bd dolt start`). Any 127.x address is this machine's loopback, so nothing else changes. *Pilot.*
+`bd dolt start`). Any 127.x address is this machine's loopback, so nothing else changes. (Pilot:
+with the server halted, `bd` failed with connection refused and no other dolt process appeared.)
 
 Why not `~/.beads/shared-server/`: that is bd's own directory for its shared-server mode (its pid,
 port and lock files, port 3308). Our server must not share it.
@@ -164,9 +168,9 @@ setup is run again and passes once `dolt creds check` succeeds. A rebuilt machin
 stored key. A separate key per place (laptop, each cloud sandbox) is recommended, so one can be
 revoked without the other. API tokens are at https://www.dolthub.com/settings/tokens.
 
-*Pilot:* whether DoltHub accepts the API token as a push password (`DOLT_REMOTE_PASSWORD`, which
-would have to be in the server's environment, with `--user` on every remote call). If it does, the
-key and the manual step can be dropped.
+DoltHub doesn't accept the API token as a push password (pilot: `dolt push --user` with
+`DOLT_REMOTE_PASSWORD` set to the token was refused with "permission denied"), so the
+credential key is needed.
 
 ## Database names
 
@@ -178,8 +182,8 @@ not of the name.
 
 Hyphens are kept: Dolt keeps directory names as database names (never set
 `DOLT_DBNAME_REPLACE`), DoltHub allows letters, digits, `-` and `_`, and bd allows hyphens in
-server mode when the database is named explicitly. SQL quotes the name with backticks. *Pilot:*
-every bd command works with a hyphenated name.
+server mode when the database is named explicitly. SQL quotes the name with backticks. (Pilot:
+`bd init --database pilot-hyphen`, then create, list, ready and show all worked.)
 
 Names bd treats as test databases are refused (it may drop them): names starting `testdb_`,
 `beads_test`, `beads_pt`, `beads_vr`, `benchdb_`, `doctest_`, `doctortest_`.
@@ -209,9 +213,11 @@ be set host-wide; `dolt.auto-start: false`, `dolt.host` and `dolt.port` are (in 
 bd 1.3.4 commits every write to Dolt itself; the sync's commit only catches a write left between
 bd's SQL commit and its Dolt commit. Nothing may set `dolt.auto-commit` to `off` or `batch`.
 
-*Pilot:* whether a new **worktree** of an onboarded clone finds the main checkout's `.beads`
-(and its `.env`) by itself. bd 1.3.4 may do this; if not, onboarding also writes a one-line
-`.beads/redirect` in each worktree, pointing at the main checkout's `.beads` (also excluded).
+Worktrees (pilot): a worktree reads the `.beads/` committed in the repo. If the committed
+`.beads/metadata.json` says server mode and names the database, a new worktree uses the shared
+server with no setup. If `.beads/` isn't committed, it uses the main checkout's. A repo whose
+committed `metadata.json` still says embedded (k8s-platform today) needs that file changed when it
+moves to the server (a commit in that repo; the owner's call), or worktrees use embedded mode.
 
 ## What every session is told
 
@@ -361,10 +367,19 @@ each step that changes something outside the clone.
    It runs `bd init` from a scratch directory that isn't a git repo, never in the clone:
    `bd init --server --external --server-host 127.0.1.1 --server-port 3307 --database <db>
    --prefix <prefix> --skip-agents --skip-hooks --non-interactive`, adds the `dolthub` remote,
-   removes any other, and pushes. (*Pilot:* whether a new DoltHub database starts empty or with a
-   first commit; if the latter, clone it as in step 4 and initialise into the clone.)
-6. Make the database's project id match the clone's: bd compares `project_id` in the clone's
-   tracked `.beads/metadata.json` with the database's and refuses to write on a mismatch.
+   removes any other, and pushes. Before creating anything it checks, with the API token, that the
+   token belongs to the account (`GET /api/v1alpha1/user`) and that `<account>/<db>` exists and is
+   empty (`GET /api/v2/databases/<account>/<db>`; a new DoltHub database has no Dolt data at all).
+   It prints the database's project id for step 6. To create the DoltHub database (API v2):
+   `POST /api/v2/databases` with `{"owner": "<account>", "name": "<db>", "visibility": "private"}`
+   and `Authorization: Bearer <token>`.
+6. The clone's `.beads/metadata.json` (tracked) must match the database: bd compares its
+   `project_id` with the database's (`SELECT value FROM metadata WHERE `key` = '_project_id'`) and
+   refuses to write on a mismatch. A repo with no beads yet has no such file: write it
+   (`{"database": "dolt", "backend": "dolt", "dolt_mode": "server", "dolt_database": "<db>",
+   "project_id": "<id>"}`) and tell the owner it's a new file to commit. That's the one tracked
+   file onboarding may create, and only when the repo has no `.beads/` at all; an existing one is
+   the owner's to change.
 7. Write `.beads/.env` (see [Clients](#clients)) and add it to `.git/info/exclude`.
 8. Verify: `bd ready` works; `bd` from a worktree sees the same issues (if the repo has one); trigger
    one sync and check its log line is `ok`.
@@ -373,8 +388,8 @@ each step that changes something outside the clone.
    `dolt.shared-server: true`, `dolt.auto-commit` off, or bd's git hooks importing a tracked
    `issues.jsonl` on checkout.
 
-Onboarding writes only untracked files in the clone (`.beads/.env`, and `.beads/redirect` if
-needed).
+Onboarding writes only untracked files in the clone (`.beads/.env`), except
+`.beads/metadata.json` in a repo that had no beads at all (step 6).
 
 ## Installing
 
@@ -401,7 +416,8 @@ Instructions for the agent:
    on purpose, stop: the halt is resolved first.
 3. Tag every database `pre-<tool>-<version>-<YYYYMMDDTHHMM>` and push the tags to DoltHub.
 4. `ai-sandbox-beads-server stop "upgrade <tool> A -> B"` (the sync then pauses, since the marker
-   exists), and copy the data directory (`cp -a`, with the server stopped) next to it.
+   exists), and copy the data directory (`cp -a`, with the server stopped) to
+   `~/.local/share/ai-sandbox/data/beads-backups/all-<YYYYMMDDTHHMM>` (outside the data directory).
 5. Install the new version side by side and switch the link (as in Installing).
 6. **bd only:** bd doesn't migrate a database that has a remote by itself. For each database:
    `BD_ALLOW_REMOTE_MIGRATE=1 bd migrate schema`, with the server started by
@@ -424,33 +440,32 @@ only, after pushing the current state to a backup branch. Prefer fixing forward.
 
 ## Pilot
 
-`tests/host/beads-pilot.sh`: one test run on the real laptop after the module is installed, and
-again after any dolt or bd upgrade. It uses a DoltHub database kept for the purpose,
-`ai_sandbox_pilot`, reset at the start of each run (the DoltHub API has no delete). It checks, in
-plain words:
+`tests/host/beads-pilot.sh --yes`: a test run on the real host after the module is installed,
+and again after any dolt or bd upgrade. It uses the DoltHub database `<account>/ai_sandbox_pilot`
+(private, kept for the purpose: DoltHub's API has no delete). It halts and resumes the server
+several times, which stops beads for every repo for a minute or two each time.
 
-- **bd can't start a server of its own:** with our server stopped, `bd ready`, `bd create`,
-  `bd doctor` and `bd dolt start` in an onboarded clone all fail, and no other `dolt` process
-  appears (127.0.1.1 makes bd treat the server as external).
-- **The same issues everywhere:** a throwaway repo is onboarded end to end; two clones and a
-  worktree see each other's writes immediately (and whether the worktree needed a redirect file).
-- **Names:** `bd init --database` creates the database under that exact name, and every bd
-  command works with a hyphen in it.
-- **Sync both ways:** a write appears on DoltHub within a minute; a commit made directly on DoltHub
-  appears locally; the audit-log rows bd keeps local don't block the sync.
-- **Halts:** a forced divergence stops the server with the marker, the log line and the status
-  output; it stays stopped across `ai-sandbox-beads-server start` and a restart of the WSL VM;
-  resume refuses while diverged and works once resolved; a database with no `dolthub` remote halts;
-  a failing sync script halts.
-- **Network:** 15 minutes without network halts (shortened by a test-only setting), a shorter
-  outage doesn't, and a failure just before sleep plus one after wake doesn't.
-- **Credentials:** whether the API token works as a push password; whether a new DoltHub database
-  starts empty.
+It checks, in plain words:
+
+- **The same issues everywhere:** a throwaway repo uses the pilot database through the server; a
+  worktree sees the same issue with no extra setup.
+- **Sync both ways:** a local write reaches DoltHub; a commit pushed from another clone arrives.
+- **Halts:** a forced divergence stops the server with the marker and the status line; bd then
+  fails and starts no server of its own; `ai-sandbox-beads-server start` and `systemctl --user
+  start beads-dolt` don't bring it up; resume refuses while diverged, and works after a backup and
+  merge. A database with no `dolthub` remote halts. A crashing sync halts (`class=sync-failed`).
 
 While testing: don't kill `dolt` or `bd` processes the test didn't start, and don't touch other
 repos' `.beads/` or git hooks.
 
-Until it passes, the repo's README.md marks the module untested.
+**First run, 2026-11-27 (laptop, dolt 2.7.7, bd 1.3.4): all of the above passed**, first by hand,
+which also settled these: a new DoltHub database starts empty; the API token is not accepted as a
+push password; bd ignores the server host from `.beads/.env` (now in the user config); hyphenated
+database names work; worktrees follow the committed `metadata.json`. **Not yet covered:** 15
+minutes offline and a failure across sleep/wake (unit-tested only); a restart of the WSL VM;
+`bd dolt start` with the server halted (the session's deny rule blocks running it; bd 1.3.4 treats
+127.0.1.1 as external, which per its source refuses); that every bd write runs in one SQL
+transaction.
 
 ## Not in this version
 

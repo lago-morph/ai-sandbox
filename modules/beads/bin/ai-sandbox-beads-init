@@ -31,8 +31,20 @@ config_require; secrets_init
 account=$(cred_get DOLTHUB_ACCOUNT dolthub-account) ||
   die "no DoltHub account: set DOLTHUB_ACCOUNT or store it with ai-sandbox-secret set dolthub-account"
 
+# Check DoltHub before creating anything here: the token is the account's, and <account>/DB
+# exists and is empty (a database with data is cloned instead: onboarding step 4).
+resp=$(mktemp); trap 'rm -f "$resp"' EXIT
+code=$(beads_dolthub_get v1alpha1/user "$resp") || true
+[ "$code" = 200 ] || die "DoltHub didn't accept the API token (HTTP $code)"
+owner=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("username",""))' "$resp")
+[ "$owner" = "$account" ] || die "the DoltHub API token belongs to '$owner', not '$account'"
+code=$(beads_dolthub_get "v2/databases/$account/$db" "$resp") || true
+[ "$code" = 200 ] || die "DoltHub has no $account/$db (HTTP $code): create it as private first (onboarding step 5)"
+size=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["data"].get("size_bytes", 0))' "$resp")
+[ "$size" = 0 ] || die "$account/$db on DoltHub already has data: clone it through the server instead (onboarding step 4)"
+
 scratch=$(mktemp -d)
-trap 'rm -rf "$scratch"' EXIT
+trap 'rm -rf "$scratch" "$resp"' EXIT
 echo "bd init in a scratch directory ($scratch) against $BEADS_HOST:$BEADS_PORT, database $db"
 (cd "$scratch" && BEADS_DOLT_AUTO_START=0 "$AI_SANDBOX_BIN/bd" init --server --external \
   --server-host "$BEADS_HOST" --server-port "$BEADS_PORT" --database "$db" --prefix "$prefix" \
@@ -49,4 +61,5 @@ beads_sql "$db" "CALL DOLT_COMMIT('-A', '--skip-empty', '-m', 'beads init')" >/d
 echo "pushing to $url"
 beads_sql "$db" "CALL DOLT_PUSH('--set-upstream', 'dolthub', 'main')" >/dev/null
 echo "done: database $db on the server, remote dolthub = $account/$db"
-echo "next: onboarding step 6 (match the project id) in $BEADS_README"
+echo "project id: $(beads_sql "$db" 'SELECT value FROM metadata WHERE `key` = '"'"'_project_id'"'"'' | tail -n1)"
+echo "next: onboarding step 6 (the clone's .beads/metadata.json) in $BEADS_README"

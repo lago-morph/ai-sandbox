@@ -116,7 +116,10 @@ def sql(query, db=None):
         cmd += ['--use-db', db]
     cmd += ['sql', '-r', 'json', '-q', query]
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+        # From an empty directory: dolt's client also looks for databases in its working directory.
+        cwd = os.path.join(os.path.dirname(STATE), 'beads-cwd')
+        os.makedirs(cwd, exist_ok=True)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=300, cwd=cwd,
                            env={**os.environ, 'DOLT_DISABLE_VERSION_CHECKS': '1'})
     except subprocess.TimeoutExpired:
         raise DoltError('timed out')

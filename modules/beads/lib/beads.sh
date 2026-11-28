@@ -32,7 +32,18 @@ beads_reachable() { (exec 3<>"/dev/tcp/$BEADS_HOST/$BEADS_PORT") 2>/dev/null; }
 beads_sql() {
   local db=
   [ $# -gt 1 ] && { db=$1; shift; }
-  "$BEADS_DOLT" --host "$BEADS_HOST" --port "$BEADS_PORT" --no-tls -u root -p "" ${db:+--use-db "$db"} sql -r csv -q "$1"
+  # From an empty directory: dolt's client also looks for databases in its working directory.
+  mkdir -p "$AI_SANDBOX_STATE/beads-cwd"
+  (cd "$AI_SANDBOX_STATE/beads-cwd" &&
+    "$BEADS_DOLT" --host "$BEADS_HOST" --port "$BEADS_PORT" --no-tls -u root -p "" ${db:+--use-db "$db"} sql -r csv -q "$1")
+}
+
+# beads_dolthub_get PATH OUT: GET https://www.dolthub.com/api/PATH with the API token (env DH_TOKEN,
+# else secret dolthub), body to OUT; prints the HTTP status. The token goes in a header file, never
+# on a command line. Callers ran secrets_init.
+beads_dolthub_get() {
+  local tok; tok=$(cred_get DH_TOKEN dolthub) || { echo 000; return 1; }
+  curl -s -o "$2" -w '%{http_code}' -H @<(printf 'Authorization: Bearer %s\n' "$tok") "https://www.dolthub.com/api/$1"
 }
 
 # beads_databases: the beads databases on the server (system databases excluded).
@@ -57,11 +68,11 @@ beads_write_marker() {
 
 # beads_marker_summary: one line describing the halt.
 beads_marker_summary() {
-  local by class reason dbs
-  by=$(beads_marker_get by); class=$(beads_marker_get class); reason=$(beads_marker_get reason); dbs=$(beads_marker_get databases)
+  local by class reason
+  by=$(beads_marker_get by); class=$(beads_marker_get class); reason=$(beads_marker_get reason)
   if [ "$class" = upgrade ]; then
     printf 'STOPPED ON PURPOSE for an upgrade at %s (%s): %s\n' "$(beads_marker_get time)" "$by" "$reason"
   else
-    printf 'STOPPED ON PURPOSE by %s at %s: %s%s (class=%s)\n' "$by" "$(beads_marker_get time)" "${dbs:+$dbs: }" "$reason" "$class"
+    printf 'STOPPED ON PURPOSE by %s at %s: %s (class=%s)\n' "$by" "$(beads_marker_get time)" "$reason" "$class"
   fi
 }

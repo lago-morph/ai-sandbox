@@ -44,7 +44,7 @@ assert_fails()    { if "$@" >/dev/null 2>&1; then echo "expected failure: $*"; r
 test_lint() {
   bash -n "$REPO/setup.sh"; bash -n "$REPO/setup-root.sh"; bash -n "$REPO/install.sh"
   local files
-  files=$(cd "$REPO" && shopt -s nullglob && echo bin/* lib/*.sh lib/*/*.sh tests/*.sh cloud/*.sh \
+  files=$(cd "$REPO" && shopt -s nullglob && echo bin/* lib/*.sh lib/*/*.sh tests/*.sh tests/host/*.sh cloud/*.sh \
     modules/*/bin/* modules/*/steps/*.sh tests/fixtures/modules/*/bin/* tests/fixtures/modules/*/steps/*.sh)
   for f in $files; do bash -n "$REPO/$f"; done
   for f in "$REPO"/lib/*.py; do python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$f"; done
@@ -752,7 +752,7 @@ test_beads_commands_respect_halt() {
   # shellcheck source=../lib/common.sh
   source "$AI_SANDBOX_LIB/common.sh"
   mkdir -p "$AI_SANDBOX_STATE"
-  printf 'time: 2026-11-27 14:02:00\nby: beads sync\nclass: hard\nreason: diverged from DoltHub (ahead 1, behind 2)\ndatabases: ai-sandbox\nnext: see Troubleshooting\n' \
+  printf 'time: 2026-11-27 14:02:00\nby: beads sync\nclass: hard\nreason: ai-sandbox: diverged from DoltHub (ahead 1, behind 2)\ndatabases: ai-sandbox\nnext: see Troubleshooting\n' \
     > "$AI_SANDBOX_STATE/beads-sync-HALTED"
   local out rc
   rc=0; out=$("$BEADS_MOD/bin/ai-sandbox-beads-status") || rc=$?
