@@ -216,7 +216,7 @@ bd's SQL commit and its Dolt commit. Nothing may set `dolt.auto-commit` to `off`
 Worktrees (pilot): a worktree reads the `.beads/` committed in the repo. If the committed
 `.beads/metadata.json` says server mode and names the database, a new worktree uses the shared
 server with no setup. If `.beads/` isn't committed, it uses the main checkout's. A repo whose
-committed `metadata.json` still says embedded (k8s-platform today) needs that file changed when it
+committed `metadata.json` still says embedded needs that file changed when it
 moves to the server (a commit in that repo; the owner's call), or worktrees use embedded mode.
 
 ## What every session is told
