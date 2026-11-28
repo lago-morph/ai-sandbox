@@ -808,18 +808,28 @@ test_beads_bd_config() {
   # shellcheck source=../lib/common.sh
   source "$AI_SANDBOX_LIB/common.sh"
   export AI_SANDBOX_MODULE_DIR=$BEADS_MOD
+  local cfg="$XDG_CONFIG_HOME/bd/config.yaml"
   mkdir -p "$XDG_CONFIG_HOME/bd" "$T/fakebin"
   printf '#!/bin/sh\n[ "$3" = --get ] && git config --global "$4"; exit 0\n' > "$T/fakebin/dolt"; chmod +x "$T/fakebin/dolt"
   export BEADS_DOLT="$T/fakebin/dolt"
   git config --global user.name t; git config --global user.email t@x
-  printf 'metrics:\n    disabled: false' > "$XDG_CONFIG_HOME/bd/config.yaml"   # bd's own file, no newline at end
+  # bd's own file: metrics on, 4-space indent, no newline at the end.
+  printf 'metrics:\n    disabled: false\n    endpoint: https://example.invalid/collect' > "$cfg"
+  ( source "$BEADS_MOD/steps/10-config.sh"; ! check >/dev/null 2>&1; apply; check )
+  python3 - "$cfg" <<'PY'
+import sys
+t = open(sys.argv[1]).read()
+assert 'metrics:\n    disabled: true\n    endpoint: https://example.invalid/collect\n' in t, t
+assert 'dolt:\n  auto-start: false\n' in t, t
+PY
+  cp "$cfg" "$T/before"; ( source "$BEADS_MOD/steps/10-config.sh"; apply ); cmp "$cfg" "$T/before"   # idempotent
+  # An existing dolt: section gets the key added under it, with its indentation.
+  printf 'dolt:\n    other: 1\n' > "$cfg"
   ( source "$BEADS_MOD/steps/10-config.sh"; apply; check )
-  assert_contains "$(cat "$XDG_CONFIG_HOME/bd/config.yaml")" $'    disabled: false\n# Added by ai-sandbox'
-  ( source "$BEADS_MOD/steps/10-config.sh"; apply )   # idempotent
-  assert_eq "$(grep -c '^dolt:' "$XDG_CONFIG_HOME/bd/config.yaml")" 1
-  printf 'dolt:\n  other: 1\n' > "$XDG_CONFIG_HOME/bd/config.yaml"
-  local out; out=$( (source "$BEADS_MOD/steps/10-config.sh"; apply) 2>&1) && { echo "should refuse"; return 1; }
-  assert_contains "$out" "already has a 'dolt:' section"
+  assert_contains "$(cat "$cfg")" $'dolt:\n    auto-start: false\n    other: 1'
+  # No file at all.
+  rm "$cfg"; ( source "$BEADS_MOD/steps/10-config.sh"; apply; check )
+  assert_eq "$(stat -c %a "$cfg")" 600
 }
 
 # Needs a dolt binary (BEADS_TEST_DOLT=/path/to/dolt, or dolt on PATH); skipped otherwise. Runs a
