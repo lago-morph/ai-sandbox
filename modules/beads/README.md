@@ -117,7 +117,7 @@ can't override a halt.
 | Skill | `beads-onboarding`, in `~/.claude/skills/`, for every session on the host. See [The beads-onboarding skill](#the-beads-onboarding-skill). |
 | CLAUDE.md lines | [What every session is told](#what-every-session-is-told), in the managed block. |
 | Settings | Deny rules in `~/.claude/settings.json` (see [What every session is told](#what-every-session-is-told)). |
-| bd host config | `~/.config/bd/config.yaml` (bd writes it too) with `dolt.auto-start: false`, `metrics.disabled: true` and `metrics.endpoint` set to a local port nothing listens on: bd sends usage metrics to its makers by default; a repo's config can't turn them back on or redirect them. Other keys are left alone. |
+| bd host config | `~/.config/bd/config.yaml` (bd writes it too) with `dolt.auto-start: false`, `dolt.host: 127.0.1.1`, `dolt.port: 3307`, `metrics.disabled: true` and `metrics.endpoint` set to a local port nothing listens on: bd sends usage metrics to its makers by default; a repo's config can't turn them back on or redirect them. Other keys are left alone. |
 | Logs and state | `~/.local/state/ai-sandbox/beads-sync.log`, `beads-sync.state`, the halt marker `beads-sync-HALTED`. |
 
 Why 127.0.1.1: bd 1.3.4 treats a server whose host isn't `localhost`, `127.0.0.1`, `::1` or
@@ -193,16 +193,18 @@ shell still wins):
 
 ```
 BEADS_DOLT_SERVER_MODE=1
-BEADS_DOLT_SERVER_HOST=127.0.1.1
-BEADS_DOLT_SERVER_PORT=3307
 BEADS_DOLT_SERVER_DATABASE=<db>
 BEADS_DOLT_AUTO_START=0
 ```
 
+The server's address isn't in it: bd 1.3.4 refuses `BEADS_DOLT_SERVER_HOST` from a repo's `.env`
+(so a repo can't redirect where bd connects). It comes from `dolt.host`/`dolt.port` in the
+user-level `~/.config/bd/config.yaml`, which setup manages.
+
 These override the repo's tracked beads config (`.beads/metadata.json` and `config.yaml` are
 tracked by git; onboarding doesn't edit them). `.beads/.env` is added to the clone's
 `.git/info/exclude`, so it's never committed. The database name differs per repo, so this can't
-be set host-wide; only `dolt.auto-start: false` is (in `~/.config/bd/config.yaml`).
+be set host-wide; `dolt.auto-start: false`, `dolt.host` and `dolt.port` are (in `~/.config/bd/config.yaml`).
 
 bd 1.3.4 commits every write to Dolt itself; the sync's commit only catches a write left between
 bd's SQL commit and its Dolt commit. Nothing may set `dolt.auto-commit` to `off` or `batch`.

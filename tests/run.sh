@@ -823,13 +823,13 @@ test_beads_bd_config() {
 import sys
 t = open(sys.argv[1]).read()
 assert 'metrics:\n    disabled: true\n    endpoint: http://127.0.0.1:9/ai-sandbox-metrics-disabled\n' in t, t
-assert 'dolt:\n  auto-start: false\n' in t, t
+assert 'dolt:\n  auto-start: false\n  host: 127.0.1.1\n  port: 3307\n' in t, t
 PY
   cp "$cfg" "$T/before"; ( source "$BEADS_MOD/steps/10-config.sh"; apply ); cmp "$cfg" "$T/before"   # idempotent
   # An existing dolt: section gets the key added under it, with its indentation.
   printf 'dolt:\n    other: 1\n' > "$cfg"
   ( source "$BEADS_MOD/steps/10-config.sh"; apply; check )
-  assert_contains "$(cat "$cfg")" $'dolt:\n    auto-start: false\n    other: 1'
+  assert_contains "$(cat "$cfg")" $'dolt:\n    other: 1\n    auto-start: false\n    host: 127.0.1.1\n    port: 3307'
   # No file at all.
   rm "$cfg"; ( source "$BEADS_MOD/steps/10-config.sh"; apply; check )
   assert_eq "$(stat -c %a "$cfg")" 600
