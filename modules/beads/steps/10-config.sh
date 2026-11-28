@@ -1,10 +1,54 @@
 # shellcheck shell=bash
-# Dolt's commit identity from git's; bd told never to start a Dolt server of its own
-# (~/.config/bd/config.yaml); the server's data directory. See modules/beads/README.md.
+# Dolt's commit identity from git's; bd told never to start a Dolt server of its own and to send
+# no usage metrics (~/.config/bd/config.yaml); the server's data directory. See modules/beads/README.md.
 
 # shellcheck source=../lib/beads.sh
 source "$AI_SANDBOX_MODULE_DIR/lib/beads.sh"
 BD_CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}/bd/config.yaml
+
+# _bd_config check|apply: the user-level bd config (which bd also writes itself) sets
+# dolt.auto-start: false (bd never starts a Dolt server of its own) and metrics.disabled: true (no
+# usage telemetry; a repo's config can't turn it back on). Other keys are left as they are.
+_bd_config() {
+  python3 - "$BD_CONFIG" "$1" <<'PY'
+import os, re, sys
+path, action = sys.argv[1], sys.argv[2]
+want = [('dolt', 'auto-start', 'false'), ('metrics', 'disabled', 'true')]
+lines = open(path).read().splitlines() if os.path.exists(path) else []
+def section(name):
+    start = next((i for i, l in enumerate(lines) if re.match(rf'{re.escape(name)}:\s*(#.*)?$', l)), None)
+    if start is None:
+        return None, None
+    end = next((i for i in range(start + 1, len(lines)) if lines[i] and not lines[i][0].isspace()), len(lines))
+    return start, end
+changed = False
+for sec, key, val in want:
+    start, end = section(sec)
+    if start is None:
+        if lines and lines[-1].strip():
+            lines.append('')
+        lines += [f'# Set by ai-sandbox (modules/beads).', f'{sec}:', f'  {key}: {val}']
+        changed = True
+        continue
+    for i in range(start + 1, end):
+        m = re.match(rf'(\s+){re.escape(key)}:\s*([^#]*?)\s*(#.*)?$', lines[i])
+        if m:
+            if m.group(2) != val:
+                lines[i] = f'{m.group(1)}{key}: {val}'; changed = True
+            break
+    else:
+        indent = next((re.match(r'\s+', lines[i]).group(0) for i in range(start + 1, end) if lines[i].strip()), '  ')
+        lines.insert(start + 1, f'{indent}{key}: {val}'); changed = True
+if action == 'check':
+    sys.exit(1 if changed else 0)
+if changed:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + '.tmp', 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+    os.chmod(path + '.tmp', 0o600)
+    os.replace(path + '.tmp', path)
+PY
+}
 
 _ident_ok() {
   local k
@@ -17,7 +61,7 @@ _ident_ok() {
 check() {
   local ok=0
   _ident_ok || { info "dolt's user.name/user.email don't match git's"; ok=1; }
-  grep -qs '^  auto-start: false' "$BD_CONFIG" || { info "$BD_CONFIG doesn't set dolt.auto-start: false"; ok=1; }
+  _bd_config check || { info "$BD_CONFIG doesn't set dolt.auto-start: false and metrics.disabled: true"; ok=1; }
   [ -d "$BEADS_DATA" ] || { info "$BEADS_DATA missing"; ok=1; }
   return $ok
 }
@@ -29,14 +73,6 @@ apply() {
     "$BEADS_DOLT" config --global --unset "$k" >/dev/null 2>&1 || true
     "$BEADS_DOLT" config --global --add "$k" "$v" >/dev/null
   done
-  if ! grep -qs '^  auto-start: false' "$BD_CONFIG"; then
-    # bd writes this file too (e.g. its metrics settings). Add our section if it has no "dolt:"
-    # key; if it has one, editing YAML in place could break it, so ask instead.
-    grep -qs '^dolt:' "$BD_CONFIG" &&
-      die "$BD_CONFIG already has a 'dolt:' section; add '  auto-start: false' under it and re-run setup"
-    mkdir -p "$(dirname "$BD_CONFIG")"
-    [ ! -s "$BD_CONFIG" ] || [ -z "$(tail -c1 "$BD_CONFIG")" ] || echo >> "$BD_CONFIG"
-    printf '# Added by ai-sandbox (modules/beads): bd never starts a Dolt server of its own here.\ndolt:\n  auto-start: false\n' >> "$BD_CONFIG"
-  fi
+  _bd_config apply
   mkdir -p "$BEADS_DATA"
 }
