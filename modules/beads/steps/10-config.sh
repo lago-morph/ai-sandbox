@@ -7,13 +7,17 @@ source "$AI_SANDBOX_MODULE_DIR/lib/beads.sh"
 BD_CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}/bd/config.yaml
 
 # _bd_config check|apply: the user-level bd config (which bd also writes itself) sets
-# dolt.auto-start: false (bd never starts a Dolt server of its own) and metrics.disabled: true (no
-# usage telemetry; a repo's config can't turn it back on). Other keys are left as they are.
+# dolt.auto-start: false (bd never starts a Dolt server of its own), metrics.disabled: true (no
+# usage telemetry; a repo's config can't turn it back on) and metrics.endpoint pointing nowhere.
+# Other keys are left as they are.
 _bd_config() {
   python3 - "$BD_CONFIG" "$1" <<'PY'
 import os, re, sys
 path, action = sys.argv[1], sys.argv[2]
-want = [('dolt', 'auto-start', 'false'), ('metrics', 'disabled', 'true')]
+want = [('dolt', 'auto-start', 'false'), ('metrics', 'disabled', 'true'),
+        # Belt and braces: if the switch were ever ignored, metrics go to a local port nothing
+        # listens on (bd uses its built-in endpoint only when this is empty).
+        ('metrics', 'endpoint', 'http://127.0.0.1:9/ai-sandbox-metrics-disabled')]
 lines = open(path).read().splitlines() if os.path.exists(path) else []
 def section(name):
     start = next((i for i, l in enumerate(lines) if re.match(rf'{re.escape(name)}:\s*(#.*)?$', l)), None)
@@ -61,7 +65,7 @@ _ident_ok() {
 check() {
   local ok=0
   _ident_ok || { info "dolt's user.name/user.email don't match git's"; ok=1; }
-  _bd_config check || { info "$BD_CONFIG doesn't set dolt.auto-start: false and metrics.disabled: true"; ok=1; }
+  _bd_config check || { info "$BD_CONFIG doesn't turn off bd's server auto-start and metrics"; ok=1; }
   [ -d "$BEADS_DATA" ] || { info "$BEADS_DATA missing"; ok=1; }
   return $ok
 }

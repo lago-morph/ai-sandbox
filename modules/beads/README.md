@@ -117,7 +117,7 @@ can't override a halt.
 | Skill | `beads-onboarding`, in `~/.claude/skills/`, for every session on the host. See [The beads-onboarding skill](#the-beads-onboarding-skill). |
 | CLAUDE.md lines | [What every session is told](#what-every-session-is-told), in the managed block. |
 | Settings | Deny rules in `~/.claude/settings.json` (see [What every session is told](#what-every-session-is-told)). |
-| bd host config | `~/.config/bd/config.yaml` (bd writes it too) with `dolt.auto-start: false` and `metrics.disabled: true`: bd sends usage metrics to its makers by default; a repo's config can't turn them back on. Other keys are left alone. |
+| bd host config | `~/.config/bd/config.yaml` (bd writes it too) with `dolt.auto-start: false`, `metrics.disabled: true` and `metrics.endpoint` set to a local port nothing listens on: bd sends usage metrics to its makers by default; a repo's config can't turn them back on or redirect them. Other keys are left alone. |
 | Logs and state | `~/.local/state/ai-sandbox/beads-sync.log`, `beads-sync.state`, the halt marker `beads-sync-HALTED`. |
 
 Why 127.0.1.1: bd 1.3.4 treats a server whose host isn't `localhost`, `127.0.0.1`, `::1` or

@@ -819,7 +819,7 @@ test_beads_bd_config() {
   python3 - "$cfg" <<'PY'
 import sys
 t = open(sys.argv[1]).read()
-assert 'metrics:\n    disabled: true\n    endpoint: https://example.invalid/collect\n' in t, t
+assert 'metrics:\n    disabled: true\n    endpoint: http://127.0.0.1:9/ai-sandbox-metrics-disabled\n' in t, t
 assert 'dolt:\n  auto-start: false\n' in t, t
 PY
   cp "$cfg" "$T/before"; ( source "$BEADS_MOD/steps/10-config.sh"; apply ); cmp "$cfg" "$T/before"   # idempotent
