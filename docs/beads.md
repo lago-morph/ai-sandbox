@@ -14,9 +14,17 @@ One Dolt SQL server on the machine that every `bd` client uses:
 - Cloud sandboxes (later, not in this module's first version) work the same way: their own
   local server, syncing with the same DoltHub databases.
 
-The owner doesn't run sessions on the same repo in two places at once, so the histories should
-never diverge. When they do, sync stops the server instead of merging (see
+How it's used: the laptop host is the primary environment. Cloud sandboxes and other machines
+are used only while the laptop is unavailable (off, asleep, offline or broken), never at the
+same time as it. So writes come from one place at a time, and the histories should never
+diverge. When they do, sync stops the server instead of merging (see
 [Stopping on purpose](#stopping-on-purpose)).
+
+The realistic way they diverge is a handover: the laptop goes away with commits it hasn't pushed
+yet (up to a minute's worth), work continues in a cloud sandbox from DoltHub's older copy, and
+the laptop comes back. Its first sync then finds both sides have new commits and halts, which is
+what should happen: the owner decides how to combine them. A write on the laptop after it wakes
+but before its first pull (at most a minute) has the same effect.
 
 ## What the module installs
 
@@ -249,7 +257,7 @@ Until it passes, README.md marks the module untested.
 
 ## Not in this version
 
-- Cloud sandboxes. The sync, status and resume commands are written to run without the rest of
+- Cloud sandboxes (used only while the laptop is unavailable). The sync, status and resume commands are written to run without the rest of
   ai-sandbox (inputs through a few environment variables, no secrets backend), so `cloud/setup.sh`
   can later start a local server there, clone the repo's database from DoltHub, and run the same
   sync. Because a cloud container can be reclaimed, a sync when a session ends is worth adding in
