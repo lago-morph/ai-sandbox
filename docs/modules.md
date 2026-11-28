@@ -35,32 +35,54 @@ Rules:
 
 ```
 modules/<name>/
-  module.sh        description, requires=..., and the module's CLAUDE.md lines (optional)
-  versions.sh      the pins (see below); the only place this module's versions are set
+  module.conf      the module's configuration: description, requires, and its version pins
+  claude.md        lines for the managed block in ~/.claude/CLAUDE.md (optional)
   steps/NN-*.sh    check/apply steps, same contract as lib/steps/
   bin/             commands installed into ~/.local/bin as ai-sandbox-<name>-*
+  skills/<skill>/  Claude skills installed for every session on the host (optional)
   templates/       units, config files
+```
+
+Configuration and code are kept apart: `module.conf` and `claude.md` are data, never run.
+Everything executable is under `steps/` and `bin/`.
+
+`module.conf` is plain `key = value` lines (comments with `#`), read by a small parser in
+`lib/modules.sh`. It is **not sourced**, so nothing in it can run. Unknown keys and malformed lines
+are errors.
+
+```ini
+description = Shared Dolt server for beads, synced with DoltHub
+requires    =
+pin.dolt    = 1.xx.y
+pin.dolt.sha256.linux-amd64 = ...
+pin.bd      = 1.2.2
 ```
 
 `setup.sh` runs the base steps, then each listed module's steps in order, named
 `<module>/<step>` in the output and in `setup.log`. `./setup.sh --check` covers modules too.
-Module commands and units are files setup manages (add them to the list in CLAUDE.md).
+Module commands, skills and units are files setup manages (add them to the list in CLAUDE.md).
 
-A module can add lines to the managed ai-sandbox block in `~/.claude/CLAUDE.md` (for example, how
-to troubleshoot its services). They appear only while the module is listed.
+A module's `claude.md` lines go into the managed ai-sandbox block in `~/.claude/CLAUDE.md`, and its
+skills into `~/.claude/skills/`, only while the module is listed. Both reach every session on the
+host, whatever repo it's on.
 
 ## Troubleshooting entry points
 
-The usual way something gets diagnosed: the owner opens a session against this repo and says
-"figure out what went wrong". That session has to land on the right command and document without
-being told which module failed. So every module provides:
+The usual way something gets diagnosed: the owner opens a session (on this repo, or on the repo
+where something broke) and says "figure out what went wrong". That session has to land on the
+right command and document without being told which module failed. So every module provides:
 
 - **`docs/<name>.md`** with a `## Troubleshooting` section: what the module stops or refuses on
   purpose, its likely causes, and how to resolve each. (This design doc becomes that document.)
 - **A `status` function** (and an `ai-sandbox-<name>-status` command) whose first line says
   whether the module is healthy and, if something was stopped on purpose, that it was and why.
+- **A skill** (if sessions on other repos use the module's software) that covers setting it up
+  in a repo and troubleshooting it from there, so the owner never has to switch to a session on
+  this repo. The skill reads `docs/<name>.md` from this repo's checkout
+  (`<git base dir>/ai-sandbox`); if that checkout doesn't exist (for example in a cloud
+  sandbox), it clones this repo first.
 
-Three pointers lead there:
+Pointers that lead there:
 
 1. **`ai-sandbox-status`** (new, part of the framework): runs every listed module's `status`
    and prints a one-line summary per module, healthy ones included, then the detail for any that
@@ -70,25 +92,35 @@ Three pointers lead there:
    anything; then follow the module's `docs/<name>.md` Troubleshooting section. Services can be
    stopped on purpose, and those stops are the first thing to rule out.*
 3. **The managed block in `~/.claude/CLAUDE.md`** (every session on the host, any repo) carries
-   each listed module's short rule, ending with the absolute path of its document in the main
-   checkout (`<git base dir>/ai-sandbox/docs/<name>.md`), since sessions in other repos can't
-   see this repo's relative paths.
+   each listed module's short rule, naming its skill.
 
 ## Pinning
 
-`modules/<name>/versions.sh` sets exact versions and, for downloads, a sha256 per platform:
+Pins live in each module's `module.conf` (`pin.<tool> = <version>`, plus `pin.<tool>.sha256.<platform>`
+for downloads).
 
-```bash
-DOLT_VERSION=1.xx.y
-DOLT_SHA256_LINUX_AMD64=...
-BD_VERSION=1.2.2
-```
-
+- **A tool is pinned in exactly one module.** Before running any step, setup reads every
+  module's `module.conf` in the repo (listed or not). If any tool is pinned in more than one
+  module, setup stops, naming the tool and the modules, even if the versions agree. A module
+  that needs software another module owns declares `requires = <that module>` instead of
+  pinning it.
 - A version changes only when its pin changes in this repo (by PR). Nothing ever installs
   "latest", and no timer upgrades anything; the host changes only when `./setup.sh` runs.
 - Downloads are checked against the sha256 before anything is installed.
 - `ai-sandbox-versions` prints every listed module's pins next to what's installed: the one
   place to see the versions on this host.
+
+## Credentials
+
+A module that needs a credential reads it from, in order:
+
+1. **An environment variable**, named by the providing service's own convention where it has one
+   (for example DoltHub's `DH_TOKEN`). If the service has none, the module documents the name it
+   uses. Cloud sandboxes will always provide credentials this way.
+2. **The secrets backend** (default: a file in `~/.secrets/`), through `secret_get`.
+
+Each module's doc lists its credentials: the variable name, the secret name, what it's for, and
+where to get or register it (with a link). Credentials are never printed or logged.
 
 ## Upgrades
 
@@ -136,13 +168,8 @@ Rules:
 `tests/run.sh` (throwaway `$HOME`, no network) covers the framework with fake tools:
 an unknown module name stops setup; an unlisted module is skipped and nothing is removed; a
 missing dependency stops setup; a failing `verify` rolls back and setup exits non-zero; a newer
-installed version is refused; a bad sha256 is refused before anything changes.
+installed version is refused; a bad sha256 is refused before anything changes; a tool pinned in
+two modules stops setup; a malformed `module.conf` stops setup.
 
 Each module also has a host test under `tests/host/` that runs against real software (for
 beads, the pilot in [beads.md](beads.md#pilot)).
-
-## Open questions
-
-- Pins per module (`modules/<name>/versions.sh`, proposed above) or one repo-wide
-  `versions.sh`? Per module keeps modules self-contained; `ai-sandbox-versions` gives the single
-  view either way.

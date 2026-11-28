@@ -25,60 +25,80 @@ places; the likely causes of a stop are listed under [Troubleshooting](#likely-c
 
 | Piece | Choice |
 |---|---|
-| `dolt` | Pinned release from GitHub (`DOLT_VERSION`, sha256-checked), in `~/.local/share/ai-sandbox/opt/dolt/<version>/`, linked as `~/.local/bin/dolt`. Upgraded per [modules.md](modules.md#upgrades). |
-| `bd` | Pinned at **1.2.2** (`BD_VERSION`), the version installed today, as the npm global package `@beads/bd` (`/usr/local/bin/bd`). Setup checks the version; it installs `@beads/bd@<pin>` with `sudo npm install -g` only if `bd` is missing or the pin changes. The owner changes the pin when it's time to upgrade. |
+| `dolt` | Pinned release from GitHub (`pin.dolt` in `modules/beads/module.conf`, sha256-checked), in `~/.local/share/ai-sandbox/opt/dolt/<version>/`, linked as `~/.local/bin/dolt`. Upgraded per [modules.md](modules.md#upgrades). |
+| `bd` | Pinned at **1.2.2** (`pin.bd`), the version installed today, as the npm global package `@beads/bd` (`/usr/local/bin/bd`). Setup checks the version; it installs `@beads/bd@<pin>` with `sudo npm install -g` only if `bd` is missing or the pin changes. The owner changes the pin when it's time to upgrade. |
 | Server | `beads-dolt.service`: `dolt sql-server` with a config file, bound to `127.0.0.1:3307`, user `root` without a password, data dir `~/.beads/shared-server/` (one subdirectory per database). `Restart=on-failure`, enabled at boot (lingering is already on from `80-systemd`). Won't start while the [halt marker](#stopping-on-purpose) exists. |
 | Sync | `beads-dolt-sync.timer` every **1 minute**, running `ai-sandbox-beads-sync` (`beads-dolt-sync.service`, oneshot). |
 | Commands | `ai-sandbox-beads-sync`, `ai-sandbox-beads-status`, `ai-sandbox-beads-resume`, `ai-sandbox-beads-onboard`. |
+| Skill | `beads`, in `~/.claude/skills/beads/`, for every session on the host: set up beads in the current repo, and troubleshoot it from there. See [The beads skill](#the-beads-skill). |
 | Logs and state | `~/.local/state/ai-sandbox/beads-sync.log`, `beads-sync.state`, and the halt marker `beads-sync-HALTED`. |
-| CLAUDE.md lines | The troubleshooting rule in [Troubleshooting](#troubleshooting), added to the managed block. |
+| CLAUDE.md lines | The rule in [Troubleshooting](#troubleshooting), added to the managed block. |
 
-Config: `AI_SANDBOX_BEADS_DOLTHUB_OWNER` (required): the DoltHub user that owns the databases.
-The port and data dir are fixed (one user per machine).
+Config: `AI_SANDBOX_BEADS_DOLTHUB_ACCOUNT` (required): the owner's DoltHub account, under which
+every database lives (`https://www.dolthub.com/repositories/<account>/<database>`). It is the
+DoltHub account, not a GitHub owner. The port and data dir are fixed (one user per machine).
 
 Dolt's commit identity (`dolt config --global user.name/user.email`) is set from git's.
 
 ## Credentials
 
-Two secrets, both through the secrets backend (never printed, never logged):
+Per [modules.md](modules.md#credentials): an environment variable first, then the secrets
+backend. Never printed, never logged.
 
-| Secret | What | Used for |
-|---|---|---|
-| `dolthub` | DoltHub **API token** (exists today) | DoltHub's HTTP API: checking whether a database exists and creating it, in onboarding only. |
-| `dolthub-creds` | Dolt **credential key** (JWK private key) | `dolt` clone, pull and push to `doltremoteapi.dolthub.com`, by the server. |
+| Credential | Environment variable | Secret (default: file in `~/.secrets/`) | Used for |
+|---|---|---|---|
+| DoltHub **API token** (exists today) | `DH_TOKEN` (DoltHub's own convention, from its `dh` CLI) | `dolthub` | DoltHub's HTTP API: checking whether a database exists and creating it, in onboarding only. |
+| Dolt **credential key** (a JWK private key) | `DOLT_CREDS_JWK`, the key file's contents (Dolt has no convention for this, so the name is ours) | `dolthub-creds` | `dolt` clone, pull and push to DoltHub, by the server. |
 
 Why two: DoltHub's docs describe the API token only for the HTTP API, and there's no API
-endpoint to register a credential key. A key is registered by pasting its public part into
-dolthub.com → Settings → Credentials. So:
+endpoint to register a credential key. A key is registered by pasting its public part on
+DoltHub's credentials page: **https://www.dolthub.com/settings/credentials** (*verify in pilot*;
+DoltHub's docs name the page but not its URL. Tokens are at https://www.dolthub.com/settings/tokens).
 
-1. If `dolthub-creds` is missing, setup runs `dolt creds new`, stores the private key with the
-   secrets backend, prints the **public** key, and tells the owner to add it on DoltHub. The step
-   stays unsatisfied until `dolt creds check` succeeds. This is the one manual step, once per
-   key; a rebuilt machine reuses the stored key.
-2. If it's present, setup writes it to `~/.dolt/creds/<key id>.jwk` (mode 600) and selects it
-   with `dolt creds use`.
+**`~/.secrets/dolthub-creds` and `~/.dolt/creds/` hold the same key.** `~/.secrets/` (or
+`DOLT_CREDS_JWK`) is where ai-sandbox keeps it, the copy that survives rebuilding the machine.
+`~/.dolt/creds/<key id>.jwk` is where Dolt itself reads keys; Dolt's docs give no setting or
+variable to read them from anywhere else, so setup copies the key there. Setup's check fails if
+the two differ.
+
+1. If neither `DOLT_CREDS_JWK` nor `dolthub-creds` exists, setup runs `dolt creds new`, stores the
+   private key as `dolthub-creds`, prints the **public** key and the link above, and tells the
+   owner to add it there. The step stays unsatisfied until `dolt creds check` succeeds. This is
+   the one manual step, once per key; a rebuilt machine reuses the stored key.
+2. Otherwise setup writes the key to `~/.dolt/creds/<key id>.jwk` (mode 600) and selects it with
+   `dolt creds use`.
 
 *Verify in pilot:* whether DoltHub accepts the API token as a password for `dolt push --user`
-(`DOLT_REMOTE_PASSWORD`). If it does, the credential key and the manual step can be dropped.
+(Dolt reads that password from `DOLT_REMOTE_PASSWORD`). If it does, the credential key and the
+manual step can be dropped.
 
-Cloud sandboxes get a key with the same access through their environment. A separate key per
+Cloud sandboxes get `DH_TOKEN` and `DOLT_CREDS_JWK` from their environment. A separate key per
 place is recommended, so one can be revoked without the other.
 
 ## Database names
 
-Database name = repository name (from the clone's `origin` URL, without the owner), lowercased,
-with every character outside `[a-z0-9_]` replaced by `_`. The same name is used on the local
-server and on DoltHub (`<owner>/<name>`). Issue prefixes are separate and unchanged; the name is
-what keeps repos apart.
+Database name = the repository's name (the last part of the clone's `origin` URL; the GitHub
+owner is not part of it), lowercased. The same name is used on the local server and on DoltHub,
+where it lives under the owner's DoltHub account: `ai-sandbox` → local database `ai-sandbox`,
+DoltHub `<account>/ai-sandbox`. Issue prefixes are separate and unchanged; the name is what keeps
+repos apart.
 
-*Verify in pilot:* that DoltHub and `bd` accept these names as they are.
+Hyphens are kept. DoltHub allows letters, digits, `-` and `_` (not starting or ending with `-`).
+*Verify in pilot:* that the local Dolt server and `bd` 1.2.2 handle a hyphenated database name
+(SQL needs it quoted, and Dolt may turn `-` into `_` for directory-based databases). If either
+doesn't, hyphens become `_` on both sides, so the two names still match.
 
 ## Clients
 
-Each clone is switched to server mode against `127.0.0.1:3307` and its database, with
+Each onboarded clone is switched to server mode against `127.0.0.1:3307` and its database, with
 `bd dolt set ...` (stored in `.beads/metadata.json`, which is gitignored). Clients must **never
 start a Dolt server of their own**: if one did when the shared server is stopped, the
 [halt](#stopping-on-purpose) would be bypassed and data would split.
+
+This applies to clones in **server mode** only. A clone still in **embedded mode** (bd's default:
+its own database inside the clone's `.beads/`, no server) doesn't touch the shared server or port
+3307, so it doesn't conflict. But nothing syncs it to DoltHub, so it has no off-machine copy;
+onboarding moves a repo off it.
 
 *Verify in pilot:*
 
@@ -92,7 +112,10 @@ start a Dolt server of their own**: if one did when the shared server is stopped
 
 ## Sync
 
-`ai-sandbox-beads-sync` runs every minute, under `flock` so runs never overlap. It does nothing
+`ai-sandbox-beads-sync` runs every minute from the systemd timer (systemd is the cron
+equivalent here; it also never starts a run while the previous one is still going). The script
+also takes a file lock with `flock` (a standard Linux command, not part of beads or Dolt), so a
+run started by hand or by `ai-sandbox-beads-resume` can't overlap a timer run. It does nothing
 while the halt marker exists. For each database on the server (system databases excluded), all
 through the server's SQL interface, never the `dolt` CLI on the data dir:
 
@@ -112,7 +135,10 @@ an error, so it's caught right away.
 |---|---|---|
 | **hard** | Not a fast-forward (diverged) or conflicts; push rejected; authentication or permission failure; DoltHub database missing; database left mid-merge | **Halt now.** |
 | **soft** | Network down, DNS, timeout, DoltHub 5xx, server not reachable, anything not recognised | Halt if soft errors continue for **15 minutes**. |
-| **soft** | A database with no `dolthub` remote (created outside onboarding) | Same: halt after 15 minutes. It isn't backed up, so it must be noticed. |
+| **soft** | A database on the server with no `dolthub` remote (created outside onboarding, for example by a plain `bd init --server`) | Same: halt after 15 minutes. It isn't backed up, so it must be noticed. |
+
+Only databases **on the shared server** are synced. A repo that hasn't been onboarded has no
+database there, so it never causes errors or a halt.
 
 The 15 minutes count from the **first failure of the current run of failures**, kept in
 `beads-sync.state`, and reset by a run where every database synced. So after the laptop sleeps
@@ -143,19 +169,22 @@ The log gets one line per database per minute. The sync trims it to its last 7 d
 
 ## Troubleshooting
 
-How a session gets here (see [modules.md](modules.md#troubleshooting-entry-points)): a session on
-this repo asked "what went wrong" runs `ai-sandbox-status` first (this repo's CLAUDE.md says so),
-which includes the beads status and points at this section. A session on another repo whose `bd`
-fails follows the host-wide rule below.
+How a session gets here (see [modules.md](modules.md#troubleshooting-entry-points)):
+
+- On **any repo**, the `beads` skill: the owner says "beads isn't working, figure out what went
+  wrong", or `bd` fails, and the host-wide rule below sends the session to the skill. No need to
+  open a session on this repo.
+- On **this repo**, `ai-sandbox-status` first (this repo's CLAUDE.md says so); it includes the
+  beads status and points at this section.
 
 **Rule for every session on the host** (added to the managed block in `~/.claude/CLAUDE.md`,
 because a beads failure can happen in a session on any repo):
 
-> If `bd` can't reach its server (connection refused on 127.0.0.1:3307), run
-> `ai-sandbox-beads-status` **before checking anything else**. The server is stopped on purpose
-> when a DoltHub sync fails, and that command says whether that happened and why. Don't restart
-> the server or edit beads data to work around it; report the reason to the owner. Causes and
-> fixes: `<git base dir>/ai-sandbox/docs/beads.md`, section Troubleshooting.
+> Beads on this host uses a shared Dolt server synced with DoltHub. To set beads up in a repo,
+> or if `bd` fails or can't reach its server (127.0.0.1:3307), use the `beads` skill **before
+> checking anything else**. The server is stopped on purpose when a DoltHub sync fails; the
+> skill's first step (`ai-sandbox-beads-status`) says whether that happened and why. Don't restart
+> the server or edit beads data to work around it.
 
 `ai-sandbox-beads-status` answers the question in its first line, then gives detail:
 
@@ -215,24 +244,45 @@ discarding anything.
 fast-forward of DoltHub (or equal to it), and says which. Otherwise it removes the marker,
 clears the failure state, starts the server, runs one sync, and prints the result.
 
+## The beads skill
+
+Installed into `~/.claude/skills/beads/` (for every session on the host, whatever repo). It is
+how a repo gets beads and how beads gets fixed, from the repo's own session.
+
+**Set up beads in this repo** (onboarding), when the owner asks for it, or `bd` says the repo has
+no beads, or the repo is still in embedded mode: run `ai-sandbox-beads-onboard <repo dir>
+--dry-run`, show the owner what it will do, then run it without `--dry-run`. See
+[Onboarding](#onboarding).
+
+**Troubleshoot** when `bd` fails, can't connect, or the owner says beads isn't working:
+
+1. Run `ai-sandbox-beads-status`. If it says STOPPED ON PURPOSE, that is the cause; skip the
+   usual checks.
+2. Find this repo's checkout at `<git base dir>/ai-sandbox`. If it doesn't exist (for example in
+   a cloud sandbox), clone `lago-morph/ai-sandbox` there first. Read `docs/beads.md`, section
+   Troubleshooting, and match the status and log against [Likely causes](#likely-causes).
+3. Explain the cause and the options to the owner, and follow
+   [Resolving a halt](#resolving-a-halt). Ask before anything that discards or overwrites data.
+
 ## Onboarding
 
-`ai-sandbox-beads-onboard <clone dir> [--dry-run]`. Idempotent; prints each action or "already
-done"; `--dry-run` prints what it would do and changes nothing.
+`ai-sandbox-beads-onboard <clone dir> [--dry-run]`, normally run by the [skill](#the-beads-skill).
+Idempotent; prints each action or "already done"; `--dry-run` prints what it would do and changes
+nothing. `<account>` below is the DoltHub account from `AI_SANDBOX_BEADS_DOLTHUB_ACCOUNT`, and
+`<db>` the [database name](#database-names) (the repo name, without its GitHub owner).
 
-1. Work out the database name from `origin`. Check that the server is running and not halted.
-2. **If the local server has the database:** check that its `dolthub` remote points at
-   `<owner>/<name>`; go to step 5.
-3. **If DoltHub has `<owner>/<name>`** (API token): `CALL DOLT_CLONE(...)` through the server,
-   which preserves history.
-4. **If it doesn't:**
+1. Work out `<db>` from `origin`. Check that the server is running and not halted.
+2. **If the local server has `<db>`:** check that its `dolthub` remote points at
+   `<account>/<db>`; go to step 5.
+3. **Try to connect to DoltHub's `<account>/<db>`** (API token). If it exists,
+   `CALL DOLT_CLONE(...)` it through the server, which preserves history; go to step 5.
+4. **If it doesn't exist:**
    - If the clone already has local beads data (an embedded database with issues), **stop**:
      creating an empty database would hide that data. The owner imports it first.
-   - Otherwise create `<owner>/<name>` on DoltHub as **private** (API token), create the
-     database on the server, add the `dolthub` remote, initialise beads in it (`bd init` with
-     the clone's prefix, against the server), push.
-5. Switch the clone to server mode for this database (see [Clients](#clients)); show
-   `bd dolt show`.
+   - Otherwise create `<account>/<db>` on DoltHub as **private** (API token), create `<db>` on
+     the server, add the `dolthub` remote, initialise beads in it (`bd init` with the clone's
+     prefix, against the server), push.
+5. Switch the clone to server mode for `<db>` (see [Clients](#clients)); show `bd dolt show`.
 6. Verify: `bd ready` works; `bd` from a second worktree sees the same issues (if the repo has
    one); trigger one sync and check its log line is `ok`.
 7. Warn if the repo's committed beads config still syncs to a GitHub ref, or its hooks assume
@@ -269,7 +319,8 @@ It checks:
 - the clients never start their own server: with `beads-dolt` stopped, `bd` fails and nothing
   listens on 3307;
 - whether bd commits its writes;
-- the database name rules;
+- hyphenated database names, locally and on DoltHub;
+- the DoltHub credentials page URL;
 - sync: a write appears on DoltHub within a minute; a commit made directly on DoltHub appears
   locally; a forced divergence halts the server with the marker, the log line and the status
   output; the server stays down across `systemctl --user start` and a reboot of the unit; resume
@@ -281,9 +332,10 @@ Until it passes, README.md marks the module untested.
 
 ## Not in this version
 
-- Cloud sandboxes (used only while the laptop is unavailable). The sync, status and resume commands are written to run without the rest of
-  ai-sandbox (inputs through a few environment variables, no secrets backend), so `cloud/setup.sh`
-  can later start a local server there, clone the repo's database from DoltHub, and run the same
-  sync. Because a cloud container can be reclaimed, a sync when a session ends is worth adding in
-  each repo then.
+- Cloud sandboxes (used only while the laptop is unavailable). The sync, status and resume
+  commands are written to run without the rest of ai-sandbox (credentials from `DH_TOKEN` and
+  `DOLT_CREDS_JWK`, no secrets backend), so `cloud/setup.sh` can later install `dolt`, `bd` and
+  the `beads` skill, start a local server, clone the repo's database from DoltHub, and run the
+  same sync. Because a cloud container can be reclaimed, a sync when a session ends is worth
+  adding then.
 - Importing existing beads data into DoltHub: the owner does this separately.
