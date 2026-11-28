@@ -33,11 +33,14 @@ what you're about to do at each step that changes something outside the clone. I
 2. If the clone already has beads data in embedded mode, stop: moving it is the owner's job.
 3. Server already has the database: check its only remote is `dolthub` at `<account>/<db>`.
 4. DoltHub has `<account>/<db>` (check with the API token, after confirming the token belongs to
-   the account; DoltHub answers 404 for both "missing" and "not yours"): clone it through the
+   the account with `GET https://www.dolthub.com/api/v1alpha1/user`; DoltHub answers 404 for both
+   "missing" and "not yours"): clone it through the
    server with `CALL DOLT_CLONE('--remote', 'dolthub', '<account>/<db>', '<db>')`.
 5. Neither: creating a DoltHub database can't be undone. Get the owner's explicit OK, create it
    as **private**, then `ai-sandbox-beads-init <db> <prefix>` (never `bd init` yourself).
-6. Make the database's project id match the clone's `.beads/metadata.json`.
+6. The clone's `.beads/metadata.json` must name the database and its project id
+   (`ai-sandbox-beads-init` prints it). A repo with no `.beads/` yet: write that file and tell the
+   owner to commit it. An existing one says embedded mode: tell the owner it needs changing.
 7. Write `.beads/.env` (contents in the README, "Clients") and add it to `.git/info/exclude`.
 8. Verify `bd ready`, a worktree sees the same issues, and `ai-sandbox-beads-sync` logs `ok`.
 9. Tell the owner about committed beads settings that would interfere (README step 9); don't

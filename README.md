@@ -240,9 +240,11 @@ denied. ScheduleWakeup (only used by `/loop`) was added to the list after that t
 
 ## Modules
 
-> **Untested.** The framework and the beads module are covered by the unit tests (the beads sync
-> also end to end against a real `dolt` with local remotes, when `BEADS_TEST_DOLT` points at one),
-> but beads hasn't run on a real host or against DoltHub yet: its pilot hasn't passed.
+> **Partly tested.** The framework and the beads module are covered by the unit tests (the beads
+> sync also end to end against a real `dolt` with local remotes, when `BEADS_TEST_DOLT` points at
+> one). Beads runs on the laptop (WSL2, Ubuntu 26.04) and its pilot passed against DoltHub; not yet
+> tested: long network outages and sleep/wake for real, a VM restart, other hosts, a cloud sandbox.
+> See [the pilot](modules/beads/README.md#pilot).
 
 A module owns one set of shared software. The first is **beads**: a shared Dolt server for `bd`,
 synced with DoltHub ([modules/beads/README.md](modules/beads/README.md)).
