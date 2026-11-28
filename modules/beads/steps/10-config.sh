@@ -29,12 +29,14 @@ apply() {
     "$BEADS_DOLT" config --global --unset "$k" >/dev/null 2>&1 || true
     "$BEADS_DOLT" config --global --add "$k" "$v" >/dev/null
   done
-  if [ -e "$BD_CONFIG" ] && ! grep -qs '^  auto-start: false' "$BD_CONFIG"; then
-    die "$BD_CONFIG exists but doesn't turn off bd's server auto-start; add 'dolt:' / '  auto-start: false' to it and re-run setup"
-  fi
-  if [ ! -e "$BD_CONFIG" ]; then
+  if ! grep -qs '^  auto-start: false' "$BD_CONFIG"; then
+    # bd writes this file too (e.g. its metrics settings). Add our section if it has no "dolt:"
+    # key; if it has one, editing YAML in place could break it, so ask instead.
+    grep -qs '^dolt:' "$BD_CONFIG" &&
+      die "$BD_CONFIG already has a 'dolt:' section; add '  auto-start: false' under it and re-run setup"
     mkdir -p "$(dirname "$BD_CONFIG")"
-    printf '# Written by ai-sandbox (modules/beads): bd never starts a Dolt server of its own here.\ndolt:\n  auto-start: false\n' > "$BD_CONFIG"
+    [ ! -s "$BD_CONFIG" ] || [ -z "$(tail -c1 "$BD_CONFIG")" ] || echo >> "$BD_CONFIG"
+    printf '# Added by ai-sandbox (modules/beads): bd never starts a Dolt server of its own here.\ndolt:\n  auto-start: false\n' >> "$BD_CONFIG"
   fi
   mkdir -p "$BEADS_DATA"
 }
