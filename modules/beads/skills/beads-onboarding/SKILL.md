@@ -41,9 +41,14 @@ what you're about to do at each step that changes something outside the clone. I
 6. The clone's `.beads/metadata.json` must name the database and its project id
    (`ai-sandbox-beads-init` prints it). A repo with no `.beads/` yet: write that file and tell the
    owner to commit it. An existing one says embedded mode: tell the owner it needs changing.
-7. Write `.beads/.env` (contents in the README, "Clients") and add it to `.git/info/exclude`.
+7. If the committed `.beads/metadata.json` doesn't already say server mode with this database,
+   write `.beads/.env` (contents in the README, "Clients") and add it to `.git/info/exclude`.
+   This skill is the only thing that writes `.beads/.env`.
 8. Verify `bd ready`, a worktree sees the same issues, and `ai-sandbox-beads-sync` logs `ok`.
 9. Tell the owner about committed beads settings that would interfere (README step 9); don't
    change them.
 
-Repos without a DoltHub database stay in bd's embedded mode.
+A repo already using bd's embedded mode stays there until the owner moves its data. A repo with
+no beads yet is set up on the shared server with this skill (the steps above), which creates its
+DoltHub database with the owner's OK. A repo with no `.beads/.env` isn't necessarily embedded: if
+its committed `.beads/metadata.json` says server mode, it's on the server.

@@ -46,18 +46,37 @@ if [ $rc = 1 ] && ! beads_halted; then
 fi
 
 if [ -n "$repo" ]; then
+  # What bd uses: .beads/.env (untracked, written by the beads-onboarding skill) where it sets the
+  # mode or database, otherwise the clone's .beads/metadata.json as it is in the working tree. No
+  # .env is normal for a repo whose metadata.json already says server mode.
   echo "repo $repo:"
-  env_file="$repo/.beads/.env"
-  if [ -f "$env_file" ]; then
-    db=$(sed -n 's/^BEADS_DOLT_SERVER_DATABASE=//p' "$env_file")
-    echo "  server mode, database ${db:-?} (from .beads/.env)"
-    if beads_reachable; then
-      beads_databases | grep -qxF "$db" && echo "  database exists on the server" || echo "  database $db is NOT on the server"
-    fi
-  elif [ -d "$repo/.beads" ]; then
-    echo "  no .beads/.env: embedded mode (not on the shared server, not synced)"
-  else
+  if [ ! -d "$repo/.beads" ]; then
     echo "  no .beads: beads not set up here"
+  else
+    env_file="$repo/.beads/.env" meta="$repo/.beads/metadata.json"
+    env_mode=$(sed -n 's/^BEADS_DOLT_SERVER_MODE=//p' "$env_file" 2>/dev/null | tail -n1)
+    env_db=$(sed -n 's/^BEADS_DOLT_SERVER_DATABASE=//p' "$env_file" 2>/dev/null | tail -n1)
+    read -r meta_mode meta_db < <(python3 -c 'import json,sys
+try: d = json.load(open(sys.argv[1]))
+except Exception: d = {}
+print(d.get("dolt_mode") or "-", d.get("dolt_database") or "-")' "$meta")
+    if [ "$env_mode" = 1 ]; then mode=server; mode_src=".beads/.env"
+    elif [ "$meta_mode" != - ]; then mode=$meta_mode; mode_src=".beads/metadata.json"
+    else mode=unknown; mode_src="neither .beads/.env nor .beads/metadata.json sets it"; fi
+    if [ -n "$env_db" ]; then db=$env_db; db_src=".beads/.env"
+    elif [ "$meta_db" != - ]; then db=$meta_db; db_src=".beads/metadata.json"
+    else db=""; db_src="not set"; fi
+    echo "  mode: $mode (from $mode_src)"
+    echo "  database: ${db:-?} (from $db_src)"
+    if [ "$mode" = server ]; then
+      if beads_reachable; then
+        beads_databases | grep -qxF "$db" && echo "  database exists on the server" || echo "  database ${db:-?} is NOT on the server"
+      else
+        echo "  server not reachable, so the database can't be checked"
+      fi
+    elif [ "$mode" = embedded ]; then
+      echo "  embedded mode: not on the shared server, not synced"
+    fi
   fi
 fi
 exit $rc

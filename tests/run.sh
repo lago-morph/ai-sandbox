@@ -776,6 +776,27 @@ test_beads_commands_respect_halt() {
   assert_contains "$("$BEADS_MOD/bin/ai-sandbox-beads-status")" "STOPPED ON PURPOSE for an upgrade at x (me): upgrade dolt 1 -> 2"
 }
 
+test_beads_status_repo_mode() {
+  # A repo's mode comes from .beads/.env if it sets it, otherwise from .beads/metadata.json: a repo
+  # moved to the server by hand has no .env and is still in server mode.
+  export BEADS_PORT=3399   # nothing listens here: never the real server
+  local st="$BEADS_MOD/bin/ai-sandbox-beads-status" r="$T/r"
+  mkdir -p "$r"
+  assert_contains "$("$st" "$r")" "no .beads: beads not set up here"
+  mkdir -p "$r/.beads"
+  printf '{"dolt_mode": "server", "dolt_database": "kp"}' > "$r/.beads/metadata.json"
+  local out; out=$("$st" "$r" || true)
+  assert_contains "$out" "mode: server (from .beads/metadata.json)"
+  assert_contains "$out" "database: kp (from .beads/metadata.json)"
+  ! grep -q embedded <<<"$out" || { echo "reported embedded"; return 1; }
+  printf '{"dolt_mode": "embedded", "dolt_database": "kp"}' > "$r/.beads/metadata.json"
+  assert_contains "$("$st" "$r" || true)" "embedded mode: not on the shared server"
+  printf 'BEADS_DOLT_SERVER_MODE=1\nBEADS_DOLT_SERVER_DATABASE=other\n' > "$r/.beads/.env"
+  out=$("$st" "$r" || true)
+  assert_contains "$out" "mode: server (from .beads/.env)"
+  assert_contains "$out" "database: other (from .beads/.env)"
+}
+
 test_beads_init_rejects_names() {
   local n out
   for n in Bad-Name -x x- testdb_one beads_test2 doctortest_a; do
