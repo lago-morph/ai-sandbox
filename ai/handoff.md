@@ -51,12 +51,9 @@ PR: https://github.com/lago-morph/ai-sandbox/pull/26 (merged)
    sha256 (amd64 + arm64); server/sync/status/init commands, units, steps (config, credentials,
    units), skill, claude.md, deny rules; tests incl. an end-to-end sync against real dolt
    (`BEADS_TEST_DOLT=...`). Not installed on the laptop yet.
-3. Done before install (2026-11-27): k8s-platform fully synced with GitHub (git refs incl.
-   `beads-dolt-data`; all 14 worktree beads databases had nothing unpushed); npm bd 1.2.2 removed.
-4. Install on the laptop: add `beads` to AI_SANDBOX_MODULES; install dolt and bd per
-   modules/beads/README.md#installing; store the DoltHub account (`dolthub-account`); setup creates
-   the Dolt key, owner registers it; run the pilot. Then move k8s-platform's beads data
-   (from `refs/heads/beads-dolt-data`) onto the server: owner's manual step. (serves: beads works)
+3. ~~Install on the laptop~~: done 2026-11-27; `tests/host/beads-pilot.sh --yes` passed 19/19.
+   Remaining gaps are listed in modules/beads/README.md#pilot.
+4. Moving any repo onto the server is the owner's job; don't touch other repos for it.
 
 ## Open questions
 - DoltHub account name (owner, at install time).
