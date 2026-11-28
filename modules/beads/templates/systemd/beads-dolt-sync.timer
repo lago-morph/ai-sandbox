@@ -1,0 +1,11 @@
+[Unit]
+Description=Sync the beads Dolt databases with DoltHub every minute (ai-sandbox)
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

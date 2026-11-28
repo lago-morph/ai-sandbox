@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Usage: ai-sandbox-beads-status [REPO_DIR]
+# Is beads working on this host? The first line answers, and says if the server was stopped on
+# purpose and why (modules/beads/README.md, "Troubleshooting"). With REPO_DIR, also that clone's
+# beads settings. Exit 0 healthy, 1 unhealthy, 2 stopped on purpose.
+set -uo pipefail
+here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+if [ -z "${AI_SANDBOX_LIB:-}" ]; then
+  if [ -f "$here/../../../setup.sh" ]; then AI_SANDBOX_LIB=$(cd "$here/../../../lib" && pwd); else AI_SANDBOX_LIB=$HOME/.local/share/ai-sandbox/lib; fi
+fi
+# shellcheck source=../../../lib/common.sh
+source "$AI_SANDBOX_LIB/common.sh"
+if [ -f "$here/../lib/beads.sh" ]; then BEADS_LIB=$here/../lib; else BEADS_LIB=$AI_SANDBOX_SHARE/modules/beads/lib; fi
+# shellcheck source=../lib/beads.sh
+source "$BEADS_LIB/beads.sh"
+repo=${1:-}
+stale_min=15
+rc=0
+
+last_success() { python3 -c 'import json,sys,time; s=json.load(open(sys.argv[1])); t=s.get("last_success"); print(int(t) if t else "")' "$BEADS_SYNC_STATE" 2>/dev/null; }
+failures() { python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s.get("failures", 0))' "$BEADS_SYNC_STATE" 2>/dev/null || echo 0; }
+
+if beads_halted; then
+  beads_marker_summary
+  echo "  $(beads_marker_get next)"
+  rc=2
+else
+  state=$(systemctl --user is-active "$BEADS_UNIT" 2>/dev/null)
+  case "$state" in
+    active)
+      ls=$(last_success); now=$(date +%s)
+      if [ -n "$ls" ] && [ $(( (now - ls) / 60 )) -lt $stale_min ]; then echo running
+      elif [ -n "$ls" ]; then echo "running, last successful sync $(( (now - ls) / 60 )) min ago (not halted yet)"; rc=1
+      else echo "running, no successful sync yet"; [ "$(failures)" = 0 ] || rc=1; fi ;;
+    failed) echo "failed (not on purpose)"; echo "  next: show the owner the output below; with their OK, ai-sandbox-beads-server start"; rc=1 ;;
+    *) echo "stopped (not on purpose)"; echo "  next: show the owner; with their OK, ai-sandbox-beads-server start"; rc=1 ;;
+  esac
+fi
+ls=$(last_success)
+echo "last successful sync: ${ls:+$(date -d "@$ls" '+%F %T')}${ls:-never}"
+[ "$(failures)" = 0 ] || echo "failed runs in a row: $(failures)"
+if [ -f "$BEADS_LOG" ]; then echo "recent log:"; tail -n 5 "$BEADS_LOG" | sed 's/^/  /'; fi
+if [ $rc = 1 ] && ! beads_halted; then
+  echo "unit output:"; journalctl --user -u "$BEADS_UNIT" -n 5 -o cat --no-pager 2>/dev/null | sed 's/^/  /'
+  echo "listening on $BEADS_PORT:"; ss -ltnp "sport = :$BEADS_PORT" 2>/dev/null | tail -n +2 | sed 's/^/  /'
+fi
+
+if [ -n "$repo" ]; then
+  echo "repo $repo:"
+  env_file="$repo/.beads/.env"
+  if [ -f "$env_file" ]; then
+    db=$(sed -n 's/^BEADS_DOLT_SERVER_DATABASE=//p' "$env_file")
+    echo "  server mode, database ${db:-?} (from .beads/.env)"
+    if beads_reachable; then
+      beads_databases | grep -qxF "$db" && echo "  database exists on the server" || echo "  database $db is NOT on the server"
+    fi
+  elif [ -d "$repo/.beads" ]; then
+    echo "  no .beads/.env: embedded mode (not on the shared server, not synced)"
+  else
+    echo "  no .beads: beads not set up here"
+  fi
+fi
+exit $rc

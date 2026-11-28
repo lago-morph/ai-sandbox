@@ -111,8 +111,8 @@ can't override a halt.
 |---|---|
 | `dolt` | `versions.toml`: `github:dolthub/dolt`, `==` the latest stable release at implementation time, sha256-pinned. In `~/.local/share/ai-sandbox/opt/dolt/<version>/`, linked as `~/.local/bin/dolt`. |
 | `bd` | `versions.toml`: `github:gastownhall/beads`, `==1.3.4`, sha256-pinned. A self-contained binary (no node), in `opt/bd/<version>/`, linked as `~/.local/bin/bd`. |
-| Server | `beads-dolt.service` runs `ai-sandbox-beads-server run`: `dolt sql-server` with a config file, data dir `~/.local/share/ai-sandbox/data/beads/` (one subdirectory per database), listening on **127.0.1.1:3307**, user `root` without a password. `Restart=on-failure`, enabled at boot (lingering is already on). See [The server script](#the-server-script). |
-| Sync | `beads-dolt-sync.timer` every **1 minute** (`OnBootSec=1min`, `Persistent=false`), running `ai-sandbox-beads-sync` (`beads-dolt-sync.service`, oneshot, `OnFailure=` halts). |
+| Server | `beads-dolt.service` runs `ai-sandbox-beads-server run`: `dolt sql-server` (address and data dir as command-line flags), data dir `~/.local/share/ai-sandbox/data/beads/` (one subdirectory per database), listening on **127.0.1.1:3307**, user `root` without a password. `Restart=on-failure`, enabled at boot (lingering is already on). See [The server script](#the-server-script). |
+| Sync | `beads-dolt-sync.timer` every **1 minute** (`OnBootSec=1min`, `OnUnitActiveSec=1min`, `Persistent=false`), running `ai-sandbox-beads-sync` (`beads-dolt-sync.service`, oneshot). If the sync crashes (any exit but 0 or 3), `OnFailure=` runs `beads-dolt-halt.service`, which halts. |
 | Commands | `ai-sandbox-beads-server`, `ai-sandbox-beads-sync`, `ai-sandbox-beads-status`, `ai-sandbox-beads-init`. |
 | Skill | `beads-onboarding`, in `~/.claude/skills/`, for every session on the host. See [The beads-onboarding skill](#the-beads-onboarding-skill). |
 | CLAUDE.md lines | [What every session is told](#what-every-session-is-told), in the managed block. |
@@ -240,7 +240,7 @@ to a remote named `origin`, so they fail.
 
 ## The server script
 
-`ai-sandbox-beads-server <run|start|stop|resume>`. Everything that starts or stops the server goes
+`ai-sandbox-beads-server <run|start|stop|halt|resume>`. Everything that starts or stops the server goes
 through it: the unit (`run`), sessions (`start`, only with the owner's OK), upgrades and the sync
 (`stop`), the owner (`resume`).
 
@@ -255,12 +255,16 @@ through it: the unit (`run`), sessions (`start`, only with the owner's OK), upgr
   SessionStart note and the sync all see it the same way.
 - `start --upgrade` starts the server while the marker's reason is an upgrade, so the upgrading
   agent can migrate and verify while the sync stays paused. It refuses for any other marker.
+- `halt CLASS REASON [DATABASES]` is the sync's (and its `OnFailure=` unit's) way to stop on
+  purpose; it never overwrites an existing marker.
 - `resume` is described under [Resolving a halt](#resolving-a-halt).
 
 ## Sync
 
 `ai-sandbox-beads-sync` runs every minute from the timer, under its own `flock`, and exits at once
-(non-zero) while the halt marker exists. For each database on the server (from `SHOW DATABASES`,
+with code 3 while the halt marker exists (3 also after it halts; the unit counts 3 as success, so
+only a crash triggers `OnFailure=`). It's written in Python (`modules/beads/lib/beads_sync.py`) and
+talks to the server through `dolt`'s SQL client. For each database on the server (from `SHOW DATABASES`,
 excluding `information_schema` and `mysql`), through the server's SQL interface:
 
 1. The database's only remote must be `dolthub`; otherwise it's an error (no remote, or another
@@ -288,8 +292,8 @@ network isn't up on the first try). Writes in that window are the "diverged on w
 
 | Class | Examples | Action |
 |---|---|---|
-| **hard** | Diverged or conflicts; push rejected after a fresh fetch; authentication or permission failure; DoltHub database missing; a database with no `dolthub` remote, or with another remote; database left mid-merge; the sync itself crashing (`class=sync-failed`, via `OnFailure=`) | **Halt now.** |
-| **soft** | Anything that can't connect: network down, DNS, timeout, DoltHub 5xx, our server not reachable; also a push that lost a race ("target updated") and a pull refused because of a write in progress | **Halt after 15 minutes** of continuous failure. |
+| **hard** | Diverged (found by the ahead/behind count, before anything changes) or conflicts; authentication or permission failure; DoltHub database (or its `main`) missing; a database with no `dolthub` remote, or with another remote; database left mid-merge; the sync itself crashing (`class=sync-failed`, via `OnFailure=`); **any error not listed as soft** | **Halt now.** |
+| **soft** | Anything that can't connect: network down, DNS, timeout, DoltHub 5xx, our server not reachable; also a push rejected because DoltHub moved since this run's fetch (a race: the next run's fetch shows whether it's a divergence) and a merge refused because of a write in progress | **Halt after 15 minutes** of continuous failure. |
 
 The 15 minutes count from the first failure of the current run of failures, kept in
 `beads-sync.state` (written atomically; an unreadable file counts as "failing since now", never as

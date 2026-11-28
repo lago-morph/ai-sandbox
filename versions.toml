@@ -27,3 +27,26 @@ source  = "system"
 module  = "base"
 version = ">=2.40"
 source  = "system"
+
+# ---------------------------------------------------------------- beads (modules/beads/README.md)
+
+[modules.beads]
+description = "Shared Dolt server for beads, synced with DoltHub"
+requires    = []
+
+[tools.dolt]
+module  = "beads"
+version = "==2.7.7"
+source  = "github:dolthub/dolt"
+asset   = "dolt-{platform}.tar.gz"
+sha256.linux-amd64 = "087d3bca4f8cde61281bee451f6018bf52f567454f578a149339ef91f466bd92"
+sha256.linux-arm64 = "15fb45826f3edf64aad062789e051f5769f8a04ac24a9536f4d69cd6665b19d2"
+
+[tools.bd]
+module    = "beads"
+version   = "==1.3.4"
+source    = "github:gastownhall/beads"
+asset     = "beads_{version}_{platform}.tar.gz"
+platforms = { linux-amd64 = "linux_amd64", linux-arm64 = "linux_arm64" }
+sha256.linux-amd64 = "175c26904bde3ff9168d2282ff6b56f17b17f60c22fa5acb3dacc9fb3465303a"
+sha256.linux-arm64 = "f4ee6eb3ec79bb2d7eb9d717c73efbcb6fa763cc70f726b4d055b72afdd68ad5"

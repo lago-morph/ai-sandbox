@@ -34,7 +34,7 @@ Read README.md for what setup does, the config keys, and the layout.
 - Files setup manages (don't hand-edit; change the repo and re-run setup): `~/.local/bin/{rc-*,ai-sandbox-*}`,
   `~/.local/share/ai-sandbox/`, `~/.config/systemd/user/{rc@.service,rc-refresh.*}`, the
   ai-sandbox block in `~/.claude/CLAUDE.md`, `remoteDialogSeen` in `~/.claude.json`, the `(ai-sandbox)` auto mode rules, the `Bash`
-  allow rule, and the lean-tools deny rules, `enableArtifact`, the `ai-sandbox-status` SessionStart hook and modules' entries in `~/.claude/settings.json`; for each installed module its `~/.local/bin/ai-sandbox-<name>-*` commands, skills in `~/.claude/skills/`, units in `~/.config/systemd/user/`, and `~/.local/state/ai-sandbox/modules-installed`; and (with `AI_SANDBOX_HOSTNAME`) `/etc/wsl.conf`
+  allow rule, and the lean-tools deny rules, `enableArtifact`, the `ai-sandbox-status` SessionStart hook and modules' entries in `~/.claude/settings.json`; for each installed module its `~/.local/bin/ai-sandbox-<name>-*` commands, skills in `~/.claude/skills/`, units in `~/.config/systemd/user/`, and `~/.local/state/ai-sandbox/modules-installed`; for beads also `~/.config/bd/config.yaml` and dolt's global `user.name`/`user.email`/`user.creds` (key in `~/.dolt/creds/`); and (with `AI_SANDBOX_HOSTNAME`) `/etc/wsl.conf`
   `[network]`, `/etc/hosts`'s `127.0.1.1` line.
 
 ## Troubleshooting the host

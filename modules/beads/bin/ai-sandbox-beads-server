@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Usage: ai-sandbox-beads-server run|start [--upgrade]|stop REASON...|halt CLASS REASON [DBS]|resume
+# The only way the shared beads Dolt server is started or stopped (modules/beads/README.md).
+#   run              the unit's ExecStart: serves on 127.0.1.1:3307 unless stopped on purpose
+#   start            start the unit (with the owner's OK); refuses while stopped on purpose
+#   start --upgrade  start it during an upgrade (the sync stays paused); refuses for other stops
+#   stop REASON...   stop on purpose: write the marker, stop the unit. "upgrade ..." marks an upgrade
+#   halt CLASS REASON [DBS]  stop on purpose for the sync (used by the sync and its OnFailure unit)
+#   resume           the owner says so: check every database against DoltHub, remove the marker,
+#                    start the server, run one sync
+set -euo pipefail
+here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+if [ -z "${AI_SANDBOX_LIB:-}" ]; then
+  if [ -f "$here/../../../setup.sh" ]; then AI_SANDBOX_LIB=$(cd "$here/../../../lib" && pwd); else AI_SANDBOX_LIB=$HOME/.local/share/ai-sandbox/lib; fi
+fi
+# shellcheck source=../../../lib/common.sh
+source "$AI_SANDBOX_LIB/common.sh"
+if [ -f "$here/../lib/beads.sh" ]; then BEADS_LIB=$here/../lib; else BEADS_LIB=$AI_SANDBOX_SHARE/modules/beads/lib; fi
+# shellcheck source=../lib/beads.sh
+source "$BEADS_LIB/beads.sh"
+
+refuse() {
+  echo "$(beads_marker_summary)" >&2
+  echo "Stopped on purpose. Don't restart it until the owner says so; see Troubleshooting in $BEADS_README" >&2
+  exit 3
+}
+upgrade_allowed() { [ "$(beads_marker_get class)" = upgrade ] && [ -f "$BEADS_UPGRADE_OK" ]; }
+
+wait_up() {
+  for _ in $(seq 1 30); do beads_reachable && return 0; sleep 1; done
+  die "the server didn't start listening on $BEADS_HOST:$BEADS_PORT; see: journalctl --user -u $BEADS_UNIT"
+}
+
+cmd=${1:-}; shift || true
+case "$cmd" in
+  run)
+    if beads_halted && ! upgrade_allowed; then refuse; fi
+    mkdir -p "$BEADS_DATA" "$AI_SANDBOX_STATE"
+    exec flock -n "$BEADS_SERVER_LOCK" "$BEADS_DOLT" sql-server -H "$BEADS_HOST" -P "$BEADS_PORT" \
+      --data-dir "$BEADS_DATA" -l warning
+    ;;
+  start)
+    if [ "${1:-}" = --upgrade ]; then
+      [ "$(beads_marker_get class)" = upgrade ] || { beads_halted && refuse; die "start --upgrade is only for an upgrade stop (ai-sandbox-beads-server stop upgrade ...)"; }
+      touch "$BEADS_UPGRADE_OK"
+    elif beads_halted; then
+      refuse
+    fi
+    systemctl --user start "$BEADS_UNIT"
+    wait_up
+    echo "beads server running on $BEADS_HOST:$BEADS_PORT"
+    ;;
+  stop)
+    [ $# -gt 0 ] || die "usage: ai-sandbox-beads-server stop REASON... (\"upgrade <tool> A -> B\" for an upgrade)"
+    reason="$*"; class=stopped
+    case "$reason" in upgrade*) class=upgrade ;; esac
+    beads_write_marker "${USER:-owner} (ai-sandbox-beads-server stop)" "$class" "$reason"
+    beads_log "HALT - class=$class reason=$reason"
+    systemctl --user stop "$BEADS_UNIT"
+    echo "$(beads_marker_summary)"
+    ;;
+  halt)
+    [ $# -ge 2 ] || die "usage: ai-sandbox-beads-server halt CLASS REASON [DATABASES]"
+    if ! beads_halted; then
+      beads_write_marker "beads sync" "$1" "$2" "${3:-}"
+      beads_log "HALT ${3:--} class=$1 reason=$2"
+    fi
+    systemctl --user stop "$BEADS_UNIT" || true
+    ;;
+  resume)
+    beads_halted || { echo "not stopped on purpose; nothing to resume"; exit 0; }
+    systemctl --user stop "$BEADS_UNIT" 2>/dev/null || true
+    bad=()
+    for d in "$BEADS_DATA"/*/; do
+      [ -d "$d/.dolt" ] || continue
+      db=$(basename "$d")
+      if ! (cd "$d" && timeout 120 "$BEADS_DOLT" fetch dolthub >/dev/null 2>&1); then bad+=("$db: can't fetch from DoltHub"); continue; fi
+      ahead=$(cd "$d" && "$BEADS_DOLT" log --oneline main --not dolthub/main | wc -l)
+      behind=$(cd "$d" && "$BEADS_DOLT" log --oneline dolthub/main --not main | wc -l)
+      [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ] && bad+=("$db: diverged from DoltHub (ahead $ahead, behind $behind)")
+      (cd "$d" && "$BEADS_DOLT" status | grep -q 'You have unmerged tables\|merge in progress\|conflicts') && bad+=("$db: merge or conflicts in progress")
+    done
+    if [ ${#bad[@]} -gt 0 ]; then
+      printf 'not resuming:\n'; printf '  %s\n' "${bad[@]}"; echo "resolve these first (Resolving a halt in $BEADS_README)"; exit 1
+    fi
+    rm -f "$BEADS_MARKER" "$BEADS_UPGRADE_OK" "$BEADS_SYNC_STATE"
+    beads_log "RESUME - by ${USER:-owner}"
+    systemctl --user start "$BEADS_UNIT"
+    wait_up
+    "$AI_SANDBOX_BIN/ai-sandbox-beads-sync" || true
+    tail -n 5 "$BEADS_LOG"
+    ;;
+  *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+esac

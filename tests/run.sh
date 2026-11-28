@@ -17,7 +17,7 @@ new_home() {
   unset AI_SANDBOX_GIT_BASEDIR AI_SANDBOX_SECRETS_BACKEND AI_SANDBOX_SECRETS_DIR
   unset AI_SANDBOX_HOSTNAME AI_SANDBOX_NAME_PREFIX AI_SANDBOX_SPAWN_MODE AI_SANDBOX_PERMISSION_MODE AI_SANDBOX_REFRESH_INTERVAL
   unset AI_SANDBOX_MODULES AI_SANDBOX_STATE AI_SANDBOX_VERSIONS AI_SANDBOX_MODULES_DIR AI_SANDBOX_PLATFORM
-  unset XDG_STATE_HOME DOLT_CREDS_JWK TEST_CRED
+  unset XDG_STATE_HOME DOLT_CREDS_JWK TEST_CRED DOLTHUB_ACCOUNT DH_TOKEN BEADS_PORT BEADS_DATA BEADS_DOLT
   mkdir -p "$HOME/.secrets" && chmod 700 "$HOME/.secrets"
   export PATH="$REPO/bin:$ORIG_PATH"
 }
@@ -705,6 +705,139 @@ test_setup_stops_on_unknown_module() {
   local out; out=$("$REPO/setup.sh" --check 2>&1) && { echo "should fail"; return 1; }
   assert_contains "$out" "unknown module 'nope' in AI_SANDBOX_MODULES"
   ! grep -q '^ok \|^PENDING' <<<"$out" || { echo "ran steps before stopping"; return 1; }
+}
+
+# ------------------------------------------------------------------ beads module
+
+BEADS_MOD="$REPO/modules/beads"
+
+test_beads_sync_logic() {
+  python3 - "$BEADS_MOD/lib" <<'PY'
+import sys; sys.path.insert(0, sys.argv[1])
+import beads_sync as b
+assert b.classify('dial tcp 127.0.1.1:3307: connect: connection refused') == 'soft'
+assert b.classify('rpc error: code = Unavailable desc = 503 Service Unavailable') == 'soft'
+assert b.classify('Error 1105: ! [rejected] main -> main (non-fast-forward)') == 'soft'
+assert b.classify('permission denied: unauthenticated') == 'hard'
+assert b.classify('repository not found') == 'hard'
+assert b.classify('something nobody expected') == 'hard'
+s, stop = {}, False
+for i in range(14):                      # 14 runs, a minute apart: not yet
+    s, stop = b.next_failure_state(s, 1000 + 60 * i, window=900, runs=15, gap=180)
+    assert not stop, i
+s, stop = b.next_failure_state(s, 1000 + 60 * 15, window=900, runs=15, gap=180)
+assert stop and s['failures'] == 15
+# One failure before sleep, one after waking 8 h later: the count starts again.
+s, _ = b.next_failure_state({}, 0, window=900, runs=15, gap=180)
+s, stop = b.next_failure_state(s, 8 * 3600, window=900, runs=15, gap=180)
+assert not stop and s['failures'] == 1 and s['first_failure'] == 8 * 3600
+s = b.success_state(s, 9 * 3600)
+assert s['failures'] == 0 and 'first_failure' not in s and s['last_success'] == 9 * 3600
+PY
+}
+
+test_beads_commands_respect_halt() {
+  # shellcheck source=../lib/common.sh
+  source "$AI_SANDBOX_LIB/common.sh"
+  mkdir -p "$AI_SANDBOX_STATE"
+  printf 'time: 2026-11-27 14:02:00\nby: beads sync\nclass: hard\nreason: diverged from DoltHub (ahead 1, behind 2)\ndatabases: ai-sandbox\nnext: see Troubleshooting\n' \
+    > "$AI_SANDBOX_STATE/beads-sync-HALTED"
+  local out rc
+  rc=0; out=$("$BEADS_MOD/bin/ai-sandbox-beads-status") || rc=$?
+  assert_eq "$rc" 2
+  assert_eq "$(head -n1 <<<"$out")" "STOPPED ON PURPOSE by beads sync at 2026-11-27 14:02:00: ai-sandbox: diverged from DoltHub (ahead 1, behind 2) (class=hard)"
+  rc=0; out=$("$BEADS_MOD/bin/ai-sandbox-beads-server" start 2>&1) || rc=$?
+  assert_eq "$rc" 3
+  assert_contains "$out" "Don't restart it until the owner says so"
+  rc=0; out=$("$BEADS_MOD/bin/ai-sandbox-beads-server" run 2>&1) || rc=$?
+  assert_eq "$rc" 3
+  rc=0; out=$("$BEADS_MOD/bin/ai-sandbox-beads-server" start --upgrade 2>&1) || rc=$?
+  assert_eq "$rc" 3
+  rc=0; out=$(BEADS_DOLT=/bin/false "$BEADS_MOD/bin/ai-sandbox-beads-sync") || rc=$?
+  assert_eq "$rc" 3
+  assert_contains "$out" "stopped on purpose; not syncing"
+  # An upgrade stop allows start --upgrade's run (the flag file), nothing else.
+  printf 'time: x\nby: me\nclass: upgrade\nreason: upgrade dolt 1 -> 2\n' > "$AI_SANDBOX_STATE/beads-sync-HALTED"
+  assert_contains "$("$BEADS_MOD/bin/ai-sandbox-beads-status")" "STOPPED ON PURPOSE for an upgrade at x (me): upgrade dolt 1 -> 2"
+}
+
+test_beads_init_rejects_names() {
+  local n out
+  for n in Bad-Name -x x- testdb_one beads_test2 doctortest_a; do
+    out=$("$BEADS_MOD/bin/ai-sandbox-beads-init" "$n" p 2>&1) && { echo "accepted $n"; return 1; }
+    assert_contains "$out" "database name '$n'"
+  done
+}
+
+test_beads_module_installs() {
+  # The real module's files go where the framework puts them, and its lines and rules apply.
+  ai-sandbox-init-config AI_SANDBOX_MODULES=beads >/dev/null
+  # shellcheck source=../lib/common.sh
+  source "$AI_SANDBOX_LIB/common.sh"; config_load
+  # shellcheck source=../lib/modules.sh
+  source "$AI_SANDBOX_LIB/modules.sh"
+  export AI_SANDBOX_MODULES_DIR="$REPO/modules" AI_SANDBOX_VERSIONS="$REPO/versions.toml"
+  modules_preflight
+  ( source "$REPO/lib/steps/35-modules.sh"; apply; check )
+  for c in server sync status init; do [ -x "$AI_SANDBOX_BIN/ai-sandbox-beads-$c" ]; done
+  [ -f "$HOME/.claude/skills/beads-onboarding/SKILL.md" ]
+  assert_contains "$(cat "$AI_SANDBOX_UNIT_DIR/beads-dolt.service")" "ExecStart=$AI_SANDBOX_BIN/ai-sandbox-beads-server run"
+  assert_contains "$(modules_claude_md)" "**Beads (\`bd\`) on this host.**"
+  claude_settings_merge "$AI_SANDBOX_SHARE/modules/beads/settings.json" apply
+  assert_contains "$(cat "$HOME/.claude/settings.json")" '"Bash(bd dolt start:*)"'
+  if command -v systemd-analyze >/dev/null; then
+    (cd "$AI_SANDBOX_UNIT_DIR" && systemd-analyze --user verify beads-dolt.service beads-dolt-sync.service \
+      beads-dolt-sync.timer beads-dolt-halt.service 2>&1 | grep -v 'is not executable\|ai-sandbox-beads' || true) | tee "$T/verify"
+    [ ! -s "$T/verify" ]
+  fi
+}
+
+# Needs a dolt binary (BEADS_TEST_DOLT=/path/to/dolt, or dolt on PATH); skipped otherwise. Runs a
+# throwaway dolt sql-server on 127.0.1.1:3398 with file:// remotes: no network, no systemd.
+test_beads_sync_end_to_end() {
+  local dolt=${BEADS_TEST_DOLT:-$(command -v dolt || true)}
+  [ -n "$dolt" ] || { echo "(no dolt binary; skipped)"; return 0; }
+  export BEADS_DOLT=$dolt BEADS_PORT=3398 BEADS_DATA="$T/data" DOLT_ROOT_PATH="$T/doltroot" DOLT_DISABLE_VERSION_CHECKS=1
+  export AI_SANDBOX_BIN="$T/fakebin" AI_SANDBOX_STATE="$T/state"
+  mkdir -p "$BEADS_DATA" "$T/remote" "$AI_SANDBOX_BIN" "$AI_SANDBOX_STATE"
+  # The halt goes to a fake server command: never the real systemd.
+  printf '#!/bin/sh\necho "$@" >> "%s/halts"\nprintf "class: %%s\\nreason: %%s\\n" "$2" "$3" > "%s/beads-sync-HALTED"\n' "$T" "$AI_SANDBOX_STATE" \
+    > "$AI_SANDBOX_BIN/ai-sandbox-beads-server"
+  chmod +x "$AI_SANDBOX_BIN/ai-sandbox-beads-server"
+  "$dolt" config --global --add user.name t >/dev/null; "$dolt" config --global --add user.email t@x >/dev/null
+  "$dolt" sql-server -H 127.0.1.1 -P 3398 --data-dir "$BEADS_DATA" -l warning > "$T/server.log" 2>&1 &
+  BEADS_TEST_PID=$!
+  trap 'kill $BEADS_TEST_PID 2>/dev/null || true; wait $BEADS_TEST_PID 2>/dev/null || true; rm -rf "$T"' EXIT
+  for _ in $(seq 1 30); do (exec 3<>/dev/tcp/127.0.1.1/3398) 2>/dev/null && break; sleep 0.5; done
+  q() { "$dolt" --host 127.0.1.1 --port 3398 --no-tls -u root -p "" ${2:+--use-db "$2"} sql -r csv -q "$1" >/dev/null; }
+  local sync="$BEADS_MOD/bin/ai-sandbox-beads-sync" log="$AI_SANDBOX_STATE/beads-sync.log"
+  q 'CREATE DATABASE `my-db`'
+  q "CREATE TABLE t (id int primary key); INSERT INTO t VALUES (1)" my-db
+  q "CALL DOLT_REMOTE('add', 'dolthub', 'file://$T/remote/my-db')" my-db
+  q "CALL DOLT_COMMIT('-A', '-m', 'init'); CALL DOLT_PUSH('dolthub', 'main')" my-db   # what ai-sandbox-beads-init does
+  q "INSERT INTO t VALUES (10)" my-db
+  "$sync"; assert_contains "$(tail -n1 "$log")" "my-db ok behind=0 ahead=1"
+  "$sync"; assert_contains "$(tail -n1 "$log")" "my-db ok behind=0 ahead=0"
+  # A commit on the other side is pulled (fast-forward).
+  q "CALL DOLT_CLONE('--remote', 'dolthub', 'file://$T/remote/my-db', 'other')"
+  q "INSERT INTO t VALUES (2); CALL DOLT_COMMIT('-A', '-m', 'elsewhere'); CALL DOLT_PUSH('dolthub', 'main')" other
+  q "INSERT INTO t VALUES (3)" my-db     # an uncommitted local write rides along
+  "$sync" || true; assert_contains "$(grep ' my-db ' "$log" | tail -n1)" "my-db error hard diverged"
+  assert_contains "$(cat "$T/halts")" "hard my-db: diverged from DoltHub (ahead 1, behind 1) my-db"
+  local rc=0; "$sync" || rc=$?; assert_eq "$rc" 3   # halted: does nothing
+  # A database without a dolthub remote halts at once.
+  rm -f "$AI_SANDBOX_STATE/beads-sync-HALTED" "$T/halts"
+  q "CALL DOLT_REMOTE('remove', 'dolthub')" my-db
+  q "CALL DOLT_REMOTE('remove', 'dolthub')" other
+  q 'DROP DATABASE `other`'
+  "$sync" || true; assert_contains "$(cat "$T/halts")" "no dolthub remote"
+  # Server unreachable: soft, no halt until the window and the run count are both reached.
+  rm -f "$AI_SANDBOX_STATE/beads-sync-HALTED" "$T/halts"
+  kill $BEADS_TEST_PID; wait $BEADS_TEST_PID 2>/dev/null || true
+  BEADS_SOFT_WINDOW=0 BEADS_SOFT_RUNS=2 "$sync"; [ ! -f "$T/halts" ]
+  assert_contains "$(tail -n1 "$log")" "error soft server:"
+  BEADS_SOFT_WINDOW=0 BEADS_SOFT_RUNS=2 "$sync" || true
+  assert_contains "$(cat "$T/halts")" "soft no successful sync for 0 min (2 runs)"
 }
 
 # ------------------------------------------------------------------ main

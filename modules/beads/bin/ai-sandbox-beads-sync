@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Usage: ai-sandbox-beads-sync
+# One sync of every beads database with DoltHub (modules/beads/README.md, "Sync"). Run every
+# minute by beads-dolt-sync.timer; safe to run by hand. Exit 0 synced (or a soft failure still
+# within the grace period), 3 stopped on purpose.
+set -euo pipefail
+here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+if [ -z "${AI_SANDBOX_LIB:-}" ]; then
+  if [ -f "$here/../../../setup.sh" ]; then AI_SANDBOX_LIB=$(cd "$here/../../../lib" && pwd); else AI_SANDBOX_LIB=$HOME/.local/share/ai-sandbox/lib; fi
+fi
+# shellcheck source=../../../lib/common.sh
+source "$AI_SANDBOX_LIB/common.sh"
+if [ -f "$here/../lib/beads.sh" ]; then BEADS_LIB=$here/../lib; else BEADS_LIB=$AI_SANDBOX_SHARE/modules/beads/lib; fi
+# shellcheck source=../lib/beads.sh
+source "$BEADS_LIB/beads.sh"
+mkdir -p "$AI_SANDBOX_STATE"
+export AI_SANDBOX_BIN
+exec flock -w 300 "$BEADS_SYNC_LOCK" python3 "$BEADS_LIB/beads_sync.py"
