@@ -11,7 +11,7 @@ Usage: versions.py FILE COMMAND [ARGS]
 
 Paths come from the environment: AI_SANDBOX_BIN (default ~/.local/bin), AI_SANDBOX_SHARE
 (default ~/.local/share/ai-sandbox), AI_SANDBOX_PLATFORM (default from `uname -m`).
-See docs/modules.md.
+See modules/README.md.
 """
 import os
 import re
@@ -29,7 +29,7 @@ INSTALLED = ('github', 'url', 'npm', 'pypi')      # pinned exactly (==)
 DOWNLOADS = ('github', 'url')                     # sha256-checked, live in opt/
 PLATFORMS = ('linux-amd64', 'linux-arm64')
 MACHINES = {'x86_64': 'linux-amd64', 'amd64': 'linux-amd64', 'aarch64': 'linux-arm64', 'arm64': 'linux-arm64'}
-MODULE_KEYS = {'description', 'requires', 'doc'}
+MODULE_KEYS = {'description', 'requires'}
 TOOL_KEYS = {'module', 'version', 'source', 'asset', 'platforms', 'sha256', 'version_cmd'}
 NAME = re.compile(r'^[a-z0-9][a-z0-9-]*$')
 SPEC = re.compile(r'^\s*(==|>=|<=|<|>)\s*([0-9]+(?:\.[0-9]+)*)\s*$')
@@ -167,7 +167,7 @@ def platform():
 def doc_of(d, module):
     if module == 'base':
         return 'README.md'
-    return d['modules'][module].get('doc', f'docs/{module}.md')
+    return f'modules/{module}/README.md'
 
 
 def installed_version(name, t):
@@ -206,7 +206,7 @@ def check_tool(d, name, t):
     doc = doc_of(d, t['module'])
     plat = platform()
     if kind in DOWNLOADS and plat not in t.get('sha256', {}):
-        return 'no-checksum', f'no-checksum {name} {plat}: versions.toml has no sha256.{plat} for {name}; add it (docs/modules.md#versionstoml)'
+        return 'no-checksum', f'no-checksum {name} {plat}: versions.toml has no sha256.{plat} for {name}; add it (modules/README.md#versionstoml)'
     have, note = installed_version(name, t)
     if have is None:
         if note:

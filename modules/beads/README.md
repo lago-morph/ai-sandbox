@@ -27,7 +27,7 @@ places; the likely causes of a stop are listed under [Troubleshooting](#troubles
 
 Start here when beads isn't working. How a session gets here: the SessionStart note, the
 [rule every session sees](#what-every-session-is-told), the `beads-onboarding` skill, or
-`ai-sandbox-status` on this repo (see [modules.md](modules.md#troubleshooting-entry-points)).
+`ai-sandbox-status` on this repo (see [the modules framework](../README.md#troubleshooting-entry-points)).
 
 **First, `ai-sandbox-beads-status`.** Its first line answers whether the server was stopped on
 purpose:
@@ -35,7 +35,7 @@ purpose:
 ```
 STOPPED ON PURPOSE by beads sync at 2026-11-27 14:02: ai-sandbox diverged from DoltHub (class=hard)
   also failing: other-repo (class=hard, auth)
-  don't restart it; see "Resolving a halt" in docs/beads.md
+  don't restart it; see "Resolving a halt" in modules/beads/README.md
 last successful sync: 2026-11-27 14:01
 recent log:
   ...
@@ -142,7 +142,7 @@ for past work. Accepted; don't change bd's `dolt_ignore`.
 
 ## Credentials
 
-Per [modules.md](modules.md#credentials): environment variable, then the secrets backend, else
+Per [the modules framework](../README.md#credentials): environment variable, then the secrets backend, else
 setup stops; if both exist and differ, setup stops. Never printed, never logged.
 
 | What | Environment variable | Secret (default: file in `~/.secrets/`) | Used for |
@@ -248,7 +248,7 @@ through it: the unit (`run`), sessions (`start`, only with the owner's OK), upgr
   runs.
 - If the halt marker exists, `run` and `start` refuse, print the marker (when, why, which
   databases) and "Stopped on purpose. Don't restart it until the owner says so; see
-  docs/beads.md#troubleshooting", and exit with a code the unit doesn't restart on
+  modules/beads/README.md#troubleshooting", and exit with a code the unit doesn't restart on
   (`RestartPreventExitStatus=`), so there's no restart loop.
 - `stop <reason>` writes the marker with the reason (a halt, or "upgrade in progress by <who>"),
   then stops the unit. An upgrade is a stop on purpose like any other, so status, the
@@ -328,9 +328,9 @@ Don't install, initialise or start anything; tell the owner and stop.
 
 1. Run `ai-sandbox-beads-status <repo dir>`. If it says STOPPED ON PURPOSE, that is the cause; skip
    the usual checks.
-2. Read [Troubleshooting](#troubleshooting) in this repo's checkout (`<git base dir>/ai-sandbox`,
-   or a shallow clone into a temporary directory if there's none) and match the status and log
-   against the likely causes.
+2. Read [Troubleshooting](#troubleshooting) in the installed copy of this document
+   (`~/.local/share/ai-sandbox/modules/beads/README.md`) and match the status and log against the
+   likely causes.
 3. Explain the cause and the options to the owner. Ask before anything that discards or overwrites
    data, and before removing the halt.
 
@@ -444,7 +444,7 @@ plain words:
 While testing: don't kill `dolt` or `bd` processes the test didn't start, and don't touch other
 repos' `.beads/` or git hooks.
 
-Until it passes, README.md marks the module untested.
+Until it passes, the repo's README.md marks the module untested.
 
 ## Not in this version
 

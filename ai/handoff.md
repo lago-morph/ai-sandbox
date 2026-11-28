@@ -51,11 +51,11 @@ PR: https://github.com/lago-morph/ai-sandbox/pull/26 (merged)
    helper (`cred_source`/`cred_get`), `ai-sandbox-status`/`ai-sandbox-versions`, SessionStart hook,
    tests with fixtures. Host not changed: `./setup.sh` not run (pending: 30-install, 70 hook).
    `python3-tomli` was installed by hand on the laptop for the tests; step 10 now installs it.
-2. Implement `modules/beads/` per docs/beads.md: `[modules.beads]` + dolt/bd in `versions.toml`
+2. Implement `modules/beads/` per modules/beads/README.md: `[modules.beads]` + dolt/bd in `versions.toml`
    (dolt latest stable, sha256 from the release digest; memory: beads-use-latest-stable), commands,
    steps (credentials, units), skill, claude.md, settings.json deny rules. README: mark untested.
    (serves: beads)
-3. Owner removes the npm bd; run `./setup.sh --check`, install per docs/beads.md#installing, owner
+3. Owner removes the npm bd; run `./setup.sh --check`, install per modules/beads/README.md#installing, owner
    registers the key; run the pilot. (serves: beads works)
 
 ## Open questions
@@ -64,14 +64,14 @@ PR: https://github.com/lago-morph/ai-sandbox/pull/26 (merged)
 ## Verify state
 ```bash
 git fetch -q && git log --oneline -1 origin/main
-ls docs/modules.md docs/beads.md; command -v dolt || echo "dolt not installed"
+ls modules/README.md modules/beads/README.md; command -v dolt || echo "dolt not installed"
 ```
 
 ## Reading list
 | Path | Section | Why |
 |---|---|---|
-| docs/modules.md | whole | the framework spec |
-| docs/beads.md | whole | the beads module spec |
+| modules/README.md | whole | the framework spec |
+| modules/beads/README.md | whole | the beads module spec |
 | CLAUDE.md | whole | repo rules: steps, tests, setup --check first, managed files |
 
 ## Environment

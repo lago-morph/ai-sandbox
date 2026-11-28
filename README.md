@@ -243,14 +243,14 @@ denied. ScheduleWakeup (only used by `/loop`) was added to the list after that t
 > **Untested.** The framework is covered by the unit tests, but no module exists yet and none
 > has run on a real host.
 
-A module owns one set of shared software (the first planned one is beads: [docs/beads.md](docs/beads.md)).
-The design is in [docs/modules.md](docs/modules.md). In short:
+A module owns one set of shared software (the first planned one is beads: [modules/beads/README.md](modules/beads/README.md)).
+The design is in [modules/README.md](modules/README.md). In short:
 
 - [`versions.toml`](versions.toml) lists every module and the version of every tool ai-sandbox
   installs (`==`) or relies on from the distro (`>=`).
 - `AI_SANDBOX_MODULES` turns modules on. Setup copies their files and **checks** their tools; it
   never installs or upgrades a tool. When a tool is missing or doesn't match, setup stops and names
-  the section of `docs/<module>.md` to follow; the session running setup follows it, then re-runs
+  the section of `modules/<module>/README.md` to follow; the session running setup follows it, then re-runs
   setup.
 - `ai-sandbox-status` is the first thing to run when something isn't working; every session also
   gets its `--brief` output at start (nothing when all is well).
@@ -282,8 +282,8 @@ The design is in [docs/modules.md](docs/modules.md). In short:
   `AI_SANDBOX_SECRETS_BACKEND=<name>`. Nothing else reads secrets directly.
 - **New setup step:** add `lib/steps/NN-name.sh` defining `check` (report-only; exit 1 if work
   is needed) and `apply`. Steps run in file-name order.
-- **New module:** add `modules/<name>/`, its entries in `versions.toml` and `docs/<name>.md`
-  ([docs/modules.md](docs/modules.md)).
+- **New module:** add `modules/<name>/`, its entries in `versions.toml` and `modules/<name>/README.md`
+  ([modules/README.md](modules/README.md)).
 
 ## Layout
 

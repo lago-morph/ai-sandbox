@@ -39,14 +39,14 @@ Read README.md for what setup does, the config keys, and the layout.
 
 ## Troubleshooting the host
 When asked what went wrong on this host, run `ai-sandbox-status` first, before reading service
-logs or changing anything; then follow the module's `docs/<name>.md` Troubleshooting section.
+logs or changing anything; then follow the module's `modules/<name>/README.md` Troubleshooting section.
 Services can be stopped on purpose, and those stops are the first thing to rule out.
 
 ## Developing
 - Run `tests/run.sh` before every commit (it needs `shellcheck`; tests use a throwaway `$HOME`).
   `tests/run.sh --host` also runs `./setup.sh --check` against this machine, read-only.
 - Bash with `set -euo pipefail`; keep `shellcheck -S warning` clean.
-- Tool versions live only in `versions.toml`; modules in `modules/<name>/` (docs/modules.md).
+- Tool versions live only in `versions.toml`; modules in `modules/<name>/` (modules/README.md).
 - Steps in `lib/steps/` define `check` (report only, exit 1 if work is needed) and `apply`
   (idempotent). Secrets only through `secret_get`/`secret_has`; distro specifics only in
   `lib/platform/`.

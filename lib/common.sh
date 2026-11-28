@@ -122,7 +122,7 @@ secret_set() {
 
 # ---------------------------------------------------------------- credentials
 # A credential (or the account name that goes with one) comes from an environment variable
-# first, then the secrets backend. See docs/modules.md#credentials. Callers run secrets_init.
+# first, then the secrets backend. See modules/README.md#credentials. Callers run secrets_init.
 
 # cred_source VAR SECRET: prints "env VAR" or "secret <where>"; exit 1 if neither is set.
 # Dies if both are set and differ (without printing either value).

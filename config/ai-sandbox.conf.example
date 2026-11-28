@@ -37,6 +37,6 @@
 # off: remove those rules. See README.md.
 # AI_SANDBOX_LEAN_TOOLS=on
 
-# Modules this host uses, space-separated (see docs/modules.md). Empty: none. Removing a name
+# Modules this host uses, space-separated (see modules/README.md). Empty: none. Removing a name
 # never uninstalls anything; an unknown name stops setup.
 # AI_SANDBOX_MODULES=

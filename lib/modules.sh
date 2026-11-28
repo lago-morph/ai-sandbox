@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Modules: optional sets of software, listed in AI_SANDBOX_MODULES and defined in versions.toml
-# and modules/<name>/. See docs/modules.md. Sourced after common.sh.
+# and modules/<name>/. See modules/README.md. Sourced after common.sh.
 
 modules_listed() { local m; for m in $AI_SANDBOX_MODULES; do echo "$m"; done | awk '!seen[$0]++'; }
 modules_known()  { find "$AI_SANDBOX_MODULES_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort; }

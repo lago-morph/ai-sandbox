@@ -2,7 +2,7 @@
 # Each listed module's files (modules/<name>/: commands, skills, units, its claude.md and
 # settings.json) copied onto the host, and the module recorded as installed. A module that is
 # no longer listed is left exactly as it is (modules are never uninstalled). The module's tools
-# and its own steps are checked after the base steps; see docs/modules.md.
+# and its own steps are checked after the base steps; see modules/README.md.
 
 # shellcheck source=../modules.sh
 source "$AI_SANDBOX_LIB/modules.sh"

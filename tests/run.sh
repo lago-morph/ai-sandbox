@@ -585,14 +585,14 @@ test_versions_check_results() {
   local out
   export FAKESYS_VERSION=1.7.0
   out=$(versions_py check alpha) && { echo "fakedl missing: should fail"; return 1; }
-  assert_contains "$out" "missing fakedl (pin 1.2.3): follow docs/alpha.md#installing"
+  assert_contains "$out" "missing fakedl (pin 1.2.3): follow modules/alpha/README.md#installing"
   assert_contains "$out" "ok fakesys 1.7.0"
   for v in 1.2.2 1.2.3 1.3.0; do mkdir -p "$AI_SANDBOX_SHARE/opt/fakedl/$v"; touch "$AI_SANDBOX_SHARE/opt/fakedl/$v/fakedl"; done
   mkdir -p "$AI_SANDBOX_BIN"
   ln -sfn "$AI_SANDBOX_SHARE/opt/fakedl/1.2.3/fakedl" "$AI_SANDBOX_BIN/fakedl"
   versions_py check alpha
   ln -sfn "$AI_SANDBOX_SHARE/opt/fakedl/1.2.2/fakedl" "$AI_SANDBOX_BIN/fakedl"
-  assert_contains "$(versions_py check alpha)" "upgrade fakedl 1.2.2 -> 1.2.3: follow docs/alpha.md#upgrading"
+  assert_contains "$(versions_py check alpha)" "upgrade fakedl 1.2.2 -> 1.2.3: follow modules/alpha/README.md#upgrading"
   ln -sfn "$AI_SANDBOX_SHARE/opt/fakedl/1.3.0/fakedl" "$AI_SANDBOX_BIN/fakedl"
   assert_contains "$(versions_py check alpha)" "newer-than-pin fakedl 1.3.0 > 1.2.3"
   rm "$AI_SANDBOX_BIN/fakedl"; touch "$AI_SANDBOX_BIN/fakedl"
@@ -630,7 +630,7 @@ test_module_files_install() {
   [ -x "$AI_SANDBOX_BIN/ai-sandbox-alpha-status" ]
   [ -f "$HOME/.claude/skills/alpha-skill/SKILL.md" ]
   assert_contains "$(cat "$AI_SANDBOX_UNIT_DIR/alpha.service")" "ExecStart=$AI_SANDBOX_BIN/ai-sandbox-alpha-status"
-  [ -f "$AI_SANDBOX_SHARE/modules/alpha/claude.md" ]
+  [ -f "$AI_SANDBOX_SHARE/modules/alpha/claude.md" ] && [ -f "$AI_SANDBOX_SHARE/modules/alpha/README.md" ]
   assert_eq "$(modules_installed)" alpha
   assert_contains "$(modules_claude_md)" "Data lives in $AI_SANDBOX_SHARE/data/alpha."
   # De-listed: nothing is removed, and it stays installed (so its lines and status remain).
@@ -656,7 +656,7 @@ test_status_command() {
   assert_contains "$out" "run ai-sandbox-status for details"
   out=$(ALPHA_STATUS_RC=1 ALPHA_STATUS_LINE="failed" ai-sandbox-status) && { echo "should exit non-zero"; return 1; }
   assert_contains "$out" "alpha: UNHEALTHY: failed"
-  assert_contains "$out" "see docs/alpha.md#troubleshooting"
+  assert_contains "$out" "see Troubleshooting in $AI_SANDBOX_SHARE/modules/alpha/README.md"
   ai-sandbox-init-config --force >/dev/null
   assert_contains "$(ai-sandbox-status)" "alpha: ok, running (installed, not listed)"
 }

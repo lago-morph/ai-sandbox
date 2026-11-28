@@ -36,7 +36,7 @@ export AI_SANDBOX_SELF_DIR AI_SANDBOX_SELF_NAME
 
 # shellcheck source=lib/modules.sh
 source "$AI_SANDBOX_LIB/modules.sh"
-# Modules (docs/modules.md): stop on an unknown name before any step. The full check needs the
+# Modules (modules/README.md): stop on an unknown name before any step. The full check needs the
 # TOML reader, which a fresh host only gets from the packages step; it then runs after the base steps.
 modules_check_names
 preflight_done=0

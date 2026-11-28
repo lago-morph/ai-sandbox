@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: ai-sandbox-versions
 # Every tool of the base setup and of each listed module: the version versions.toml asks for,
-# the version installed, and the result of the check setup runs. See docs/modules.md.
+# the version installed, and the result of the check setup runs. See modules/README.md.
 set -euo pipefail
 here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 if [ -z "${AI_SANDBOX_LIB:-}" ]; then
