@@ -99,9 +99,11 @@ Pointers that lead there:
 Pins live in each module's `module.conf` (`pin.<tool> = <version>`, plus `pin.<tool>.sha256.<platform>`
 for downloads).
 
-- **A tool is pinned in exactly one module.** Before running any step, setup reads every
-  module's `module.conf` in the repo (listed or not). If any tool is pinned in more than one
-  module, setup stops, naming the tool and the modules, even if the versions agree. A module
+- **A tool is pinned in exactly one listed module.** Before running any step, setup reads the
+  `module.conf` of every module in `AI_SANDBOX_MODULES` (modules that aren't listed are never
+  read). If any tool is pinned in more than one of them, setup stops, naming the tool and the
+  modules, even if the versions agree. So two alternative modules may pin the same tool as long
+  as only one of them is turned on. A module
   that needs software another module owns declares `requires = <that module>` instead of
   pinning it.
 - A version changes only when its pin changes in this repo (by PR). Nothing ever installs
@@ -169,7 +171,7 @@ Rules:
 an unknown module name stops setup; an unlisted module is skipped and nothing is removed; a
 missing dependency stops setup; a failing `verify` rolls back and setup exits non-zero; a newer
 installed version is refused; a bad sha256 is refused before anything changes; a tool pinned in
-two modules stops setup; a malformed `module.conf` stops setup.
+two listed modules stops setup (and in an unlisted one doesn't); a malformed `module.conf` stops setup.
 
 Each module also has a host test under `tests/host/` that runs against real software (for
 beads, the pilot in [beads.md](beads.md#pilot)).
