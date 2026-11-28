@@ -30,7 +30,7 @@ places; the likely causes of a stop are listed under [Troubleshooting](#likely-c
 | Server | `beads-dolt.service`: `dolt sql-server` with a config file, bound to `127.0.0.1:3307`, user `root` without a password, data dir `~/.beads/shared-server/` (one subdirectory per database). `Restart=on-failure`, enabled at boot (lingering is already on from `80-systemd`). Won't start while the [halt marker](#stopping-on-purpose) exists. |
 | Sync | `beads-dolt-sync.timer` every **1 minute**, running `ai-sandbox-beads-sync` (`beads-dolt-sync.service`, oneshot). |
 | Commands | `ai-sandbox-beads-sync`, `ai-sandbox-beads-status`, `ai-sandbox-beads-resume`, `ai-sandbox-beads-onboard`. |
-| Skill | `beads-onboarding`, in `~/.claude/skills/beads-onboarding/`, for every session on the host: set up beads in the current repo, and troubleshoot it from there. See [The beads skill](#the-beads-onboarding-skill). |
+| Skill | `beads-onboarding`, in `~/.claude/skills/beads-onboarding/`, for every session on the host: set up beads in the current repo, and troubleshoot it from there. See [The beads-onboarding skill](#the-beads-onboarding-skill). |
 | Logs and state | `~/.local/state/ai-sandbox/beads-sync.log`, `beads-sync.state`, and the halt marker `beads-sync-HALTED`. |
 | CLAUDE.md lines | The rule in [Troubleshooting](#troubleshooting), added to the managed block. |
 
