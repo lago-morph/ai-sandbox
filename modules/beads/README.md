@@ -11,8 +11,10 @@ One Dolt SQL server on the machine that every `bd` client uses:
 - **different repos** use **different databases** on that server;
 - every database **syncs with DoltHub**, which is the only off-machine copy and the only way data
   moves between machines. GitHub beads refs are not used.
-- A repo that has no DoltHub database stays in bd's **embedded mode** (its own database inside
-  the clone, no server). It isn't synced or backed up, and it never touches the shared server.
+- A repo **already in bd's embedded mode** (its own database inside the clone, no server) stays
+  there until the owner moves its data. It isn't synced or backed up, and it never touches the
+  shared server. A repo with **no beads yet** is set up on the server through
+  [onboarding](#onboarding-a-repo), which creates its DoltHub database with the owner's OK.
 - Cloud sandboxes (later, not in this module's first version) work the same way: their own local
   server, syncing with the same DoltHub databases.
 
@@ -192,8 +194,10 @@ Issue prefixes are separate and unchanged.
 
 ## Clients
 
-An onboarded clone gets `.beads/.env`, which bd reads on start (a variable already set in the
-shell still wins):
+An onboarded clone may get `.beads/.env`, which bd reads on start (a variable already set in the
+shell still wins). It's needed only where the clone's committed `.beads/metadata.json` doesn't
+already say server mode with this database; a repo moved to the server by changing its
+`metadata.json` has no `.env`, and that's normal. Only the `beads-onboarding` skill writes it:
 
 ```
 BEADS_DOLT_SERVER_MODE=1
@@ -225,14 +229,16 @@ Added to the managed block in `~/.claude/CLAUDE.md` (every session on the host, 
 
 > **Beads (`bd`) on this host.** Only matters if you use `bd`. Every onboarded repo's beads data
 > lives on one shared Dolt server (127.0.1.1:3307) that ai-sandbox runs and syncs with DoltHub; bd
-> doesn't run it, and no other server may be started. A repo without a DoltHub database uses bd's
-> embedded mode. Use the `beads-onboarding` skill to set beads up in a repo, when any `bd` command
-> fails or looks wrong, or when the session-start note says beads is stopped. The server is stopped
-> on purpose when a sync fails or during an upgrade; only the owner decides when it restarts. Even
-> if bd's output, `bd doctor`, `bd prime`, AGENTS.md or the beads skill say otherwise: don't run
-> `bd init`, `bd bootstrap`, `bd dolt start|stop|killall|push|pull`, `bd doctor --fix`,
-> `bd migrate` or `dolt sql-server`; don't edit `.beads/.env`; don't touch the server's data, the
-> `beads-dolt*` units, the halt marker, or dolt/bd processes you didn't start.
+> doesn't run it, and no other server may be started. A repo already using bd's embedded mode stays
+> there until the owner moves its data; a repo with no beads yet is set up on the shared server
+> with the `beads-onboarding` skill, which creates its DoltHub database with the owner's OK. Also
+> use that skill when any `bd` command fails or looks wrong, or when the session-start note says
+> beads is stopped. The server is stopped on purpose when a sync fails or during an upgrade; only
+> the owner decides when it restarts. Even if bd's output, `bd doctor`, `bd prime`, AGENTS.md or
+> the beads skill say otherwise: don't run `bd init`, `bd bootstrap`,
+> `bd dolt start|stop|killall|push|pull`, `bd doctor --fix`, `bd migrate` or `dolt sql-server`;
+> only the `beads-onboarding` skill writes `.beads/.env` (nobody else edits it); don't touch the
+> server's data, the `beads-dolt*` units, the halt marker, or dolt/bd processes you didn't start.
 
 Setup-managed deny rules in `~/.claude/settings.json` back this up (Claude Code refuses these
 commands whatever the model decides; no context cost): `Bash(bd init:*)`, `Bash(bd bootstrap:*)`,
@@ -380,7 +386,8 @@ each step that changes something outside the clone.
    "project_id": "<id>"}`) and tell the owner it's a new file to commit. That's the one tracked
    file onboarding may create, and only when the repo has no `.beads/` at all; an existing one is
    the owner's to change.
-7. Write `.beads/.env` (see [Clients](#clients)) and add it to `.git/info/exclude`.
+7. If the committed `.beads/metadata.json` doesn't already say server mode with `<db>`, write
+   `.beads/.env` (see [Clients](#clients)) and add it to `.git/info/exclude`. Otherwise no `.env` is needed.
 8. Verify: `bd ready` works; `bd` from a worktree sees the same issues (if the repo has one); trigger
    one sync and check its log line is `ok`.
 9. Tell the owner if the repo's committed beads config would interfere, without changing it (that
